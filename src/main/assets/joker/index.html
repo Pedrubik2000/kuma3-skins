@@ -1,0 +1,1192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Anki Joker</title>
+<style>
+/* A Balatro style poker run over kuma3's cards: every review deals a playing card into your hand (rank = how fast you
+   answered, suit = the note, Again = debuffed); play poker hands to beat the blinds, buy jokers in the shop. */
+:root{--chips:#009dff;--mult:#fe5f55;--gold:#f5b244;--green:#4bc292;--orange:#fda200;--panel:#3a5055;--inner:#1e2b2d;
+  --edge:#5d7377;--ink:#fff;--dim:#a9b8ba;--cw:min(15vw,14vh,118px);
+  --s0:#3c3a6e;--s1:#e8364f;--s2:#1f6b5a;--s3:#e8792b;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:#1a3a2a;color:var(--ink);font:900 16px/1.15 "Trebuchet MS","Roboto Condensed",Roboto,system-ui,sans-serif;
+  overflow:hidden;user-select:none;-webkit-tap-highlight-color:transparent;text-shadow:0 2px 0 rgba(0,0,0,.35)}
+#bg{position:fixed;inset:0;width:100%;height:100%;image-rendering:pixelated;z-index:0}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.10) 0 1px,#0000 1px 3px),radial-gradient(ellipse at center,#0000 60%,rgba(0,0,0,.45))}
+#app{position:relative;z-index:1;height:100dvh;display:flex;padding:8px;gap:8px}
+button{font:inherit;color:#fff;border:0;border-radius:10px;padding:10px 14px;cursor:pointer;text-shadow:inherit;
+  box-shadow:0 4px 0 rgba(0,0,0,.35);transition:transform .05s}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.35)}
+button:disabled{filter:grayscale(1) brightness(.6);transform:none}
+.b-blue{background:var(--chips)}.b-red{background:var(--mult)}.b-orange{background:var(--orange)}.b-green{background:var(--green)}
+.b-gold{background:var(--gold)}.b-grey{background:#566}
+.box{background:var(--inner);border-radius:10px;padding:6px 8px}
+.panel{background:var(--panel);border:2px solid var(--edge);border-radius:12px;box-shadow:0 5px 0 rgba(0,0,0,.35)}
+small{font-size:12px;color:var(--dim)}
+.c-chips{color:var(--chips)}.c-mult{color:var(--mult)}.c-gold{color:var(--gold)}
+
+/* ---- the side panel: blind, round score, hand, hands/discards, money, ante */
+.side{flex:0 0 232px;display:grid;gap:6px;padding:8px;align-content:start;
+  grid-template-areas:"blind blind" "score score" "hand hand" "hands disc" "money money" "ante round" "info menu"}
+.side>*{min-width:0}
+.blind{grid-area:blind;border-radius:10px;overflow:hidden;background:var(--inner)}
+.blind h2{margin:0;padding:6px;text-align:center;font-size:21px;background:var(--bc,#009dff)}
+.blind .bd{display:flex;gap:8px;align-items:center;padding:6px}
+.blind .bd p{margin:0;font-size:12px;color:var(--dim)}
+.token{flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:17px;
+  background:var(--bc,#009dff);box-shadow:inset 0 0 0 4px rgba(0,0,0,.25),inset 0 0 0 7px rgba(255,255,255,.18)}
+.target{font-size:22px;color:var(--mult)}
+.score{grid-area:score;display:flex;align-items:center;justify-content:space-between}
+.score b{font-size:26px}
+.hand{grid-area:hand;text-align:center;padding:8px}
+.hand .ht{font-size:18px;min-height:22px}
+.cxm{display:flex;align-items:center;gap:4px;margin-top:6px}
+.cxm b{flex:1;padding:6px 8px;border-radius:8px;font-size:26px}
+.cxm .ch{background:var(--chips);text-align:right}.cxm .mu{background:var(--mult);text-align:left}
+.cxm i{color:var(--mult);font-style:normal;font-size:22px}
+.stat{text-align:center;padding:4px}
+.stat small{display:block}.stat b small{display:inline}
+.stat b{display:block;font-size:24px;background:var(--inner);border-radius:8px;margin-top:2px}
+.s-hands{grid-area:hands}.s-disc{grid-area:disc}.s-ante{grid-area:ante}.s-round{grid-area:round}
+.s-money{grid-area:money}.s-money b{font-size:30px;color:var(--gold)}
+.side .info{grid-area:info}.side .menu{grid-area:menu}
+.bump{animation:bump .25s}
+@keyframes bump{40%{transform:scale(1.18)}}
+
+/* ---- the table */
+.main{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.top{display:flex;gap:8px;align-items:flex-start}
+.slots{flex:1;min-height:calc(var(--cw)*1.32);display:flex;gap:6px;padding:4px;border-radius:10px;background:rgba(0,0,0,.18);position:relative}
+.slots.cons{flex:0 0 auto;min-width:calc(var(--cw)*2 + 20px)}
+.slots .cnt{position:absolute;bottom:-15px;left:6px;font-size:12px;color:var(--dim)}
+.stage{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;position:relative}
+.played{display:flex;justify-content:center;width:100%}
+.played>*+*{margin-left:min(8px,calc((100% - var(--n) * var(--cw)) / (var(--n) - 1)))}
+.hint{color:rgba(255,255,255,.55);font-size:15px;text-align:center}
+.handrow{display:flex;align-items:flex-end;gap:8px}
+.cards{flex:1;min-width:0;display:flex;justify-content:center;padding-top:22px;height:calc(var(--cw)*1.4 + 26px)}
+.cards>*+*{margin-left:min(6px,calc((100% - var(--n) * var(--cw)) / (var(--n) - 1)))}
+.deckpile{flex:none;width:calc(var(--cw)*.8);text-align:center;font-size:12px;color:var(--dim)}
+.deckpile .back{height:calc(var(--cw)*1.1);border-radius:8px;border:3px solid #fff;margin-bottom:3px;
+  background:repeating-linear-gradient(45deg,#e8364f 0 4px,#c42a40 4px 8px);box-shadow:0 4px 0 rgba(0,0,0,.35)}
+.controls{display:flex;gap:8px;justify-content:center;align-items:stretch;min-height:52px}
+.controls button{flex:1;max-width:170px;font-size:17px}
+.controls .rate{display:flex;flex-direction:column;align-items:center;line-height:1.05}
+.controls .rate small{color:rgba(255,255,255,.8)}
+.sorter{flex:0 0 auto!important;display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--dim);text-align:center}
+.sorter button{padding:4px 10px;font-size:13px;border-radius:7px}
+.timer{height:6px;border-radius:3px;background:rgba(0,0,0,.35);overflow:hidden}
+.timer i{display:block;height:100%;width:100%;background:var(--gold)}
+.timer.wait i{background:#778}
+.timer.low i{background:var(--mult)}
+.timer.off{visibility:hidden}
+
+/* the Anki card being reviewed: a big dark card in the middle of the table */
+.anki{flex:1;width:min(100%,640px);min-height:0;display:flex;border-radius:14px;background:rgba(14,24,26,.92);
+  border:3px solid #cfd8d9;box-shadow:0 6px 0 rgba(0,0,0,.4)}
+.anki iframe{flex:1;border:0;background:#0000;border-radius:12px}
+
+/* ---- playing cards: own pixel art */
+.pc{position:relative;flex:none;width:var(--cw);height:calc(var(--cw)*1.4);border-radius:calc(var(--cw)*.09);background:#f4f0e6;
+  border:2px solid #cfc8b8;box-shadow:0 4px 0 rgba(0,0,0,.35);transition:transform .15s;color:var(--sc)}
+.pc.s0{--sc:var(--s0)}.pc.s1{--sc:var(--s1)}.pc.s2{--sc:var(--s2)}.pc.s3{--sc:var(--s3)}
+.pc .cr{position:absolute;left:5%;top:3%;font-size:calc(var(--cw)*.2);line-height:1;text-align:center;text-shadow:none;width:22%}
+.pc .cr svg{width:100%;display:block;margin-top:1px}
+.pc .cr.br{left:auto;top:auto;right:5%;bottom:3%;transform:rotate(180deg)}
+.pc .pip{position:absolute;width:18%;transform:translate(-50%,-50%)}
+.pc .pip.dn{transform:translate(-50%,-50%) rotate(180deg)}
+.pc .pip svg,.pc .big svg{display:block;width:100%}
+.pc .big{position:absolute;left:50%;top:52%;width:46%;transform:translate(-50%,-50%);text-align:center;font-size:calc(var(--cw)*.42);text-shadow:none;line-height:1}
+.pc .big.face svg{width:70%;margin:0 auto 2px}
+.pc .etag{position:absolute;left:50%;bottom:-2px;transform:translate(-50%,50%);font-size:11px;padding:1px 5px;border-radius:5px;color:#fff;white-space:nowrap}
+.pc.bonus{background:#d4ecff;border-color:var(--chips)}.pc.bonus .etag{background:var(--chips)}
+.pc.mult{background:#ffe0dc;border-color:var(--mult)}.pc.mult .etag{background:var(--mult)}
+.pc.glass{background:linear-gradient(135deg,rgba(220,245,255,.92),rgba(160,210,235,.75) 50%,rgba(230,250,255,.9));border-color:#9fe3ff}.pc.glass .etag{background:#5bb8d8}
+.pc.steel{background:linear-gradient(135deg,#e6e9ee,#9aa3ad 45%,#dfe3e8 60%,#a7afb8);border-color:#7d8791}.pc.steel .etag{background:#6d7781}
+.pc.wild{border:3px solid transparent;background:linear-gradient(#f4f0e6,#f4f0e6) padding-box,conic-gradient(var(--s0),var(--s1),var(--s3),var(--s2),var(--s0)) border-box}
+.pc.wild .etag{background:#8a5cc4}
+.pc.deb{filter:grayscale(.9) brightness(.75)}
+.pc.deb::after{content:"";position:absolute;inset:0;border-radius:inherit;
+  background:linear-gradient(45deg,#0000 46%,#d02 46% 54%,#0000 54%),linear-gradient(-45deg,#0000 46%,#d02 46% 54%,#0000 54%);opacity:.75}
+.cards .pc{cursor:pointer}
+.pc.cur{outline:3px solid var(--gold);outline-offset:3px}
+.cards .pc.sel{transform:translateY(calc(var(--cw)*-.32))}
+.pc.ghost{background:rgba(255,255,255,.12);border:2px dashed rgba(255,255,255,.6);box-shadow:none;color:#fff}
+.pc.ghost .big{color:var(--sc);filter:brightness(1.6)}
+.pc.deal{animation:deal .35s ease-out}
+@keyframes deal{from{transform:translate(160px,-40px) rotate(25deg);opacity:0}}
+.jig{animation:jig .28s}
+@keyframes jig{30%{transform:scale(1.16) rotate(-6deg)}70%{transform:scale(1.08) rotate(4deg)}}
+.cards .pc.sel.jig{animation:none}
+
+/* jokers, tarots, planets */
+.jk{--jw:calc(var(--cw)*.95);position:relative;flex:none;width:var(--jw);height:calc(var(--jw)*1.4);border-radius:calc(var(--cw)*.09);
+  border:3px solid #fff;box-shadow:0 4px 0 rgba(0,0,0,.35);overflow:hidden;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.jk .art{width:66%}
+.jk .art svg{display:block;width:100%}
+.jk .gl{font-size:calc(var(--jw)*.21);margin-top:2px;white-space:nowrap}
+.jk .nm{position:absolute;bottom:2px;left:2px;right:2px;font-size:calc(var(--jw)*.11);text-align:center;line-height:1;opacity:.95}
+.jk.tarot{background:linear-gradient(#7b5bb5,#4f3a80)}
+.jk.planet{background:radial-gradient(circle at 50% 40%,#283a6e,#0f1630)}
+.jk.on{outline:3px solid var(--gold);outline-offset:2px}
+.price{position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:var(--inner);color:var(--gold);padding:1px 8px;border-radius:7px;font-size:15px}
+
+/* score pop-ups */
+.pop{position:fixed;z-index:40;transform:translate(-50%,-100%);padding:3px 8px;border-radius:8px;font-size:20px;pointer-events:none;
+  animation:pop .7s forwards;white-space:nowrap}
+.pop.c{background:var(--chips)}.pop.m{background:var(--mult)}.pop.x{background:#c1121f;font-size:24px}.pop.d{background:#555}.pop.g{background:var(--gold)}
+@keyframes pop{0%{transform:translate(-50%,-60%) scale(.4)}25%{transform:translate(-50%,-110%) scale(1.15)}100%{transform:translate(-50%,-150%);opacity:0}}
+.total{font-size:42px;animation:bump .4s}
+.shake{animation:shake .35s}
+@keyframes shake{20%{transform:translate(-6px,3px)}40%{transform:translate(6px,-3px)}60%{transform:translate(-4px,2px)}80%{transform:translate(3px,-1px)}}
+
+/* overlays and screens */
+.sheet{position:absolute;left:50%;top:calc(var(--cw)*1.4 + 22px);transform:translateX(-50%);z-index:30;width:min(94%,420px);padding:12px;text-align:center}
+.sheet h3{margin:0 0 4px;font-size:20px}
+.sheet p{margin:4px 0 10px;color:#dfe8e9;font-size:15px;font-weight:700}
+.sheet .row{display:flex;gap:8px;justify-content:center}
+.full{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;min-height:0}
+.logo{font-size:min(17vw,96px);line-height:.9;letter-spacing:2px;transform:rotate(-4deg);margin:2vh 0;
+  text-shadow:0 5px 0 #8a1020,0 9px 0 rgba(0,0,0,.4);animation:float 3s ease-in-out infinite alternate}
+.logo span{color:var(--mult)}
+@keyframes float{to{transform:rotate(-2deg) translateY(-6px)}}
+.decks{width:min(100%,520px);flex:0 1 auto;min-height:0;overflow:auto;padding:6px}
+.decks button{width:100%;display:flex;gap:10px;background:none;box-shadow:none;text-align:left;padding:8px 10px}
+.decks button.sel{background:rgba(255,255,255,.12)}
+.decks .name{flex:1}
+.n{width:2.6em;text-align:right}
+.row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.blinds{display:flex;gap:10px;justify-content:center;align-items:flex-end;flex-wrap:wrap}
+.bl{width:min(30%,190px);min-width:150px;text-align:center;overflow:hidden;padding-bottom:10px}
+.bl h3{margin:0;padding:8px;background:var(--bc)}
+.bl .token{margin:10px auto;width:64px;height:64px;font-size:22px}
+.bl p{margin:4px 8px;font-size:13px;color:var(--dim)}
+.bl.now{transform:translateY(-14px)}
+.bl.past,.bl.later{opacity:.6}
+.shop{width:min(100%,560px);padding:12px;display:flex;flex-direction:column;gap:12px}
+.shop .jk{--jw:calc(var(--cw)*1.1)}
+.shop .goods{display:flex;gap:16px;justify-content:center;padding-top:22px;min-height:calc(var(--cw)*1.33 + 26px)}
+.cash{width:min(100%,420px);padding:14px}
+.cash div{display:flex;justify-content:space-between;padding:4px 2px;font-size:18px}
+.levels{max-height:70dvh;overflow:auto;width:min(100%,460px)}
+.levels div{display:flex;gap:8px;padding:5px 8px;align-items:center}
+.levels .nm{flex:1}
+.levels b{min-width:3.2em;padding:2px 6px;border-radius:6px;text-align:center}
+.msg{padding:18px;text-align:center}
+
+/* phones held upright: the side panel becomes a strip on top */
+@media (orientation:portrait){
+  :root{--cw:min(20vw,11vh,118px)}
+  .jk{--jw:min(11.5vw,9vh)}
+  .slots{gap:4px}
+  .slots{min-height:calc(min(11.5vw,9vh)*1.4 + 8px)}
+  .slots.cons{min-width:calc(min(11.5vw,9vh)*2 + 12px)}
+    #app{flex-direction:column;padding:6px;gap:6px}
+  .side{flex:none;padding:6px;gap:5px;grid-template-columns:repeat(6,1fr);
+    grid-template-areas:"blind blind blind score score score" "hand hand hand hand hand hand" "hands disc money money ante menu"}
+  .s-round,.side .info{display:none}
+  .blind h2{font-size:15px;padding:3px}
+  .blind .bd{padding:4px;gap:6px}
+  .token{width:34px;height:34px;font-size:13px}
+  .target{font-size:18px}
+  .score{flex-direction:column;justify-content:center;gap:2px}
+  .score b{font-size:22px}
+  .hand{padding:5px;display:flex;align-items:center;gap:8px}
+  .hand .ht{flex:1;font-size:15px;text-align:left}
+  .cxm{flex:1.4;margin:0}
+  .cxm b{font-size:20px;padding:3px 6px}
+  .stat b{font-size:18px}
+  .s-money b{font-size:18px}
+  .side .menu{padding:4px;font-size:13px}
+  .controls{min-height:48px}
+}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div id="app"></div>
+<script src="../shared.js"></script>
+<script>
+// ---------------------------------------------------------------- data: kuma3 through the app's bridge, or examples in a browser
+const P = new URLSearchParams(location.search);
+const mock = (() => {
+  const cards = [["Ich hab keine Ahnung.","I have no idea."],["Kannst du mir kurz helfen?","Can you help me for a second?"],
+    ["Ja, auf jeden Fall.","Yes, definitely."],["Das ist mir egal.","I don't care."],["Wo warst du gestern?","Where were you yesterday?"],
+    ["Mach dir keine Sorgen.","Don't worry."],["Ich bin gleich wieder da.","I'll be right back."],["Was ist los?","What's wrong?"],
+    ["Hast du Hunger?","Are you hungry?"],["Wir sehen uns morgen.","See you tomorrow."],["Schon gut.","It's fine."]];
+  const decks = [{id:"1",name:"🐻 German",new:20,learn:3,due:180},{id:"2",name:"🐻 English",new:5,learn:0,due:12}];
+  let n = 0;
+  return {
+    status: () => ({pkg:"example", anki:true, media:true, mediaBase:""}),
+    decks: () => decks,
+    next(id) {
+      const d = decks.find(x => x.id === id);
+      if (!d || !(d.new + d.learn + d.due)) return null;
+      const i = Math.floor(Math.random() * cards.length), [q, a] = cards[i]; n++;
+      return {nid:String(1000 + i), ord:0, css:".card{font:26px serif;text-align:center}", q, a:q + "<hr>" + a, times:["<10m","1d","3d","8d"]};
+    },
+    answer() { const d = decks.find(x => x.id === run.deck), k = d.new ? "new" : d.learn ? "learn" : "due"; d[k]--; },
+    vibrate() {}, model: () => "browser", progressRead: () => ({}), progressWrite() {}, sync() {}, open() {}, grantAnki() {}, grantMedia() {}
+  };
+})();
+const api = B ? {
+  status: () => JSON.parse(B.status()), decks: () => JSON.parse(B.decks()), next: id => JSON.parse(B.next(id)),
+  answer: (c, ease, ms) => B.answer(c.nid, c.ord, ease, ms), vibrate: p => B.vibrate(p), model: () => B.model(),
+  progressRead: () => JSON.parse(B.progressRead()), progressWrite: (d, t) => B.progressWrite(d, t),
+  sync: () => B.sync(), open: () => B.openAnki(), grantAnki: () => B.grantAnki(), grantMedia: () => B.grantMedia()
+} : mock;
+
+// ---------------------------------------------------------------- the rules
+// Suits 0-3 = ♠ ♥ ♣ ♦, ranks 2-14 (14 = Ace). A card: {id, k: "nid:ord", s, r, e: enhancement, d: answered Again}.
+const SUITS = ["♠", "♥", "♣", "♦"], RANKS = {11: "J", 12: "Q", 13: "K", 14: "A"};
+const rankName = r => RANKS[r] || String(r);
+const HAND_SIZE = 8, HANDS = 4, DISCARDS = 3, PICK = 5;
+// [name, chips, mult, +chips per level, +mult per level, planet]
+const TYPES = [["High Card",5,1,10,1,"Pluto"],["Pair",10,2,15,1,"Mercury"],["Two Pair",20,2,20,1,"Uranus"],
+  ["Three of a Kind",30,3,20,2,"Venus"],["Straight",30,4,30,3,"Saturn"],["Flush",35,4,15,2,"Jupiter"],
+  ["Full House",40,4,25,2,"Earth"],["Four of a Kind",60,7,30,3,"Mars"],["Straight Flush",100,8,40,4,"Neptune"],
+  ["Five of a Kind",120,12,35,3,"Planet X"],["Flush House",140,14,40,4,"Ceres"],["Flush Five",160,16,50,3,"Eris"]];
+const TYPE = Object.fromEntries(TYPES.map(t => [t[0], t]));
+const SECRET = ["Five of a Kind", "Flush House", "Flush Five"];   // their planets show up once you played the hand
+const ENH = {bonus: "+30", mult: "+4", glass: "×2", steel: "×1.5", wild: "Wild"};
+const face = c => c.r >= 11 && c.r <= 13;
+const suitIs = (c, s) => c.e === "wild" || c.s === s;
+const chipsOf = c => c.r === 14 ? 11 : Math.min(10, c.r);
+// Rank = how fast you answered: under 1.5 s an Ace, then one rank lower per second, down to a 2 (The Clock: twice as fast)
+const rankFor = ms => { const t = ms * (bossOn("clock") ? 2 : 1); return t < 1500 ? 14 : Math.max(2, 13 - Math.floor((t - 1500) / 1000)); };
+function suitFor(k) { let h = 7; for (const ch of k) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % 4; }
+
+// The poker hand in the played cards and the cards that score (debuffed cards still make the hand, they just don't score)
+function evaluate(cs) {
+  const by = {};
+  for (const c of cs) (by[c.r] ??= []).push(c);
+  const gs = Object.values(by).sort((a, b) => b.length - a.length || b[0].r - a[0].r);
+  const five = cs.length === 5, uniq = Object.keys(by).map(Number).sort((a, b) => a - b);
+  const flush = five && [0, 1, 2, 3].some(s => cs.every(c => suitIs(c, s)));
+  const straight = five && uniq.length === 5 && (uniq[4] - uniq[0] === 4 || uniq.join() === "2,3,4,5,14");
+  const top = gs[0].length, two = gs[1]?.length ?? 0;
+  const [type, scoring] =
+    top === 5 ? [flush ? "Flush Five" : "Five of a Kind", cs]
+    : top === 3 && two === 2 ? [flush ? "Flush House" : "Full House", cs]
+    : straight && flush ? ["Straight Flush", cs]
+    : top === 4 ? ["Four of a Kind", gs[0]]
+    : flush ? ["Flush", cs]
+    : straight ? ["Straight", cs]
+    : top === 3 ? ["Three of a Kind", gs[0]]
+    : top === 2 && two === 2 ? ["Two Pair", [...gs[0], ...gs[1]]]
+    : top === 2 ? ["Pair", gs[0]]
+    : ["High Card", [gs[0].reduce((a, b) => b.r > a.r ? b : a)]];
+  return {type, scoring: cs.filter(c => scoring.includes(c)), top, pairs: gs.filter(x => x.length >= 2).length, flush, straight};
+}
+function base(type) {
+  const [, c, m, dc, dm] = TYPE[type], l = (run.levels[type] || 1) - 1;
+  const half = x => bossOn("flint") ? Math.max(1, Math.round(x / 2)) : x;
+  return [half(c + dc * l), half(m + dm * l)];
+}
+
+// Jokers: card(k, c, j) fires for every scoring card, hand(k, j) once per hand, left to right. j = the joker's own state.
+const JOKERS = {
+  joker: {n:"Joker", c:2, g:"+4", d:"+4 Mult", hand: k => k.mult(4)},
+  greedy: {n:"Greedy Joker", c:5, g:"♦", d:"Played ♦ cards give +3 Mult when scored", card: (k, c) => suitIs(c, 3) && k.mult(3)},
+  lusty: {n:"Lusty Joker", c:5, g:"♥", d:"Played ♥ cards give +3 Mult when scored", card: (k, c) => suitIs(c, 1) && k.mult(3)},
+  wrathful: {n:"Wrathful Joker", c:5, g:"♠", d:"Played ♠ cards give +3 Mult when scored", card: (k, c) => suitIs(c, 0) && k.mult(3)},
+  gluttonous: {n:"Gluttonous Joker", c:5, g:"♣", d:"Played ♣ cards give +3 Mult when scored", card: (k, c) => suitIs(c, 2) && k.mult(3)},
+  jolly: {n:"Jolly Joker", c:3, g:"2", d:"+8 Mult if played hand contains a Pair", hand: k => k.top >= 2 && k.mult(8)},
+  zany: {n:"Zany Joker", c:4, g:"3", d:"+12 Mult if played hand contains a Three of a Kind", hand: k => k.top >= 3 && k.mult(12)},
+  mad: {n:"Mad Joker", c:4, g:"2+2", d:"+10 Mult if played hand contains a Two Pair", hand: k => k.pairs >= 2 && k.mult(10)},
+  crazy: {n:"Crazy Joker", c:4, g:"→", d:"+12 Mult if played hand contains a Straight", hand: k => k.straight && k.mult(12)},
+  droll: {n:"Droll Joker", c:4, g:"≡", d:"+10 Mult if played hand contains a Flush", hand: k => k.flush && k.mult(10)},
+  sly: {n:"Sly Joker", c:3, g:"+50", d:"+50 Chips if played hand contains a Pair", hand: k => k.top >= 2 && k.chips(50)},
+  wily: {n:"Wily Joker", c:4, g:"+100", d:"+100 Chips if played hand contains a Three of a Kind", hand: k => k.top >= 3 && k.chips(100)},
+  scholar: {n:"Scholar", c:4, g:"A", d:"Played Aces give +20 Chips and +4 Mult when scored", card: (k, c) => c.r === 14 && (k.chips(20), k.mult(4))},
+  scary: {n:"Scary Face", c:4, g:"☺", d:"Played face cards give +30 Chips when scored", card: (k, c) => face(c) && k.chips(30)},
+  smiley: {n:"Smiley Face", c:4, g:"☻", d:"Played face cards give +5 Mult when scored", card: (k, c) => face(c) && k.mult(5)},
+  fib: {n:"Fibonacci", c:8, g:"φ", d:"Played A, 2, 3, 5 or 8 give +8 Mult when scored", card: (k, c) => [14, 2, 3, 5, 8].includes(c.r) && k.mult(8)},
+  even: {n:"Even Steven", c:4, g:"2·4·6", d:"Played 10, 8, 6, 4 or 2 give +4 Mult when scored", card: (k, c) => c.r <= 10 && c.r % 2 === 0 && k.mult(4)},
+  odd: {n:"Odd Todd", c:4, g:"3·5·7", d:"Played A, 9, 7, 5 or 3 give +31 Chips when scored", card: (k, c) => (c.r === 14 || c.r <= 9 && c.r % 2) && k.chips(31)},
+  banner: {n:"Banner", c:5, g:"⚑", d:"+30 Chips for each discard left", hand: k => run.disc && k.chips(30 * run.disc)},
+  summit: {n:"Mystic Summit", c:5, g:"▲", d:"+15 Mult when no discards are left", hand: k => !run.disc && k.mult(15)},
+  abstract: {n:"Abstract Joker", c:4, g:"◆", d:"+3 Mult for each Joker you have", hand: k => k.mult(3 * run.jokers.length)},
+  gros: {n:"Gros Michel", c:5, g:"(", d:"+15 Mult. 1 in 6 chance to go extinct at the end of the round", hand: k => k.mult(15)},
+  supernova: {n:"Supernova", c:5, g:"✦", d:"Adds how many times this poker hand was played this run to Mult",
+    hand: k => k.mult(1 + (run.played[k.type] | 0))},
+  bus: {n:"Ride the Bus", c:6, g:"BUS", d:"+1 Mult per hand in a row played without a scoring face card",
+    hand: (k, j) => { j.m = k.scoring.some(face) ? 0 : (j.m | 0) + 1; j.m && k.mult(j.m); }, now: j => `+${j.m | 0} Mult`},
+  green: {n:"Green Joker", c:4, g:"+1", d:"+1 Mult per hand played, −1 Mult per discard",
+    hand: (k, j) => { j.m = (j.m | 0) + 1; k.mult(j.m); }, now: j => `+${j.m | 0} Mult`},
+  bull: {n:"Bull", c:6, g:"$→", d:"+2 Chips for each $1 you have", hand: k => run.money > 0 && k.chips(2 * run.money)},
+  golden: {n:"Golden Joker", c:6, g:"$4", d:"Earn $4 at the end of the round", cash: 4},
+  blackboard: {n:"Blackboard", c:6, g:"♠♣", d:"×3 Mult if every card held in hand is ♠ or ♣",
+    hand: k => k.held.every(c => suitIs(c, 0) || suitIs(c, 2)) && k.xmult(3)},
+  // study jokers
+  speed: {n:"Speed Demon", c:7, g:"⚡", d:"×2 Mult if every scoring card is an Ace or a King (fast answers)", hand: k => k.scoring.every(c => c.r >= 13) && k.xmult(2)},
+  streak: {n:"Streak Joker", c:5, g:"≋", d:"+2 Mult for each day of your study streak", hand: k => g.streak && k.mult(2 * g.streak), now: () => `+${2 * g.streak} Mult`},
+  combo: {n:"Combo Joker", c:5, g:"××", d:"+1 Mult for each card in your current combo", hand: k => combo && k.mult(combo), now: () => `+${combo} Mult`},
+  goal: {n:"Goal Getter", c:6, g:"◎", d:"×1.5 Mult once today's review goal is done", hand: k => g.reps >= g.goal && k.xmult(1.5)},
+  mulligan: {n:"Mulligan", c:7, g:"↺", d:"Cards you answered Again are not debuffed"},
+  bird: {n:"Early Bird", c:4, g:"☀", d:"+10 Mult before noon", hand: k => new Date().getHours() < 12 && k.mult(10)},
+  owl: {n:"Night Owl", c:4, g:"☾", d:"+10 Mult after 8 pm", hand: k => new Date().getHours() >= 20 && k.mult(10)},
+  bookworm: {n:"Bookworm", c:6, g:"▤", d:"+1 Chip for each card reviewed this run", hand: k => k.chips(run.reviews), now: () => `+${run.reviews} Chips`},
+};
+const hasJ = key => run.jokers.some(j => j.k === key);
+const sellOf = j => Math.max(1, Math.floor(JOKERS[j.k].c / 2));
+
+// Tarots: change up to `max` selected cards in hand; the change sticks to that Anki card for the rest of the run
+const TAROTS = {
+  empress: {n:"The Empress", r:"III", max:2, e:"mult", d:"Up to 2 selected cards become Mult cards (+4 Mult)"},
+  hiero: {n:"The Hierophant", r:"V", max:2, e:"bonus", d:"Up to 2 selected cards become Bonus cards (+30 Chips)"},
+  justice: {n:"Justice", r:"VIII", max:1, e:"glass", d:"1 selected card becomes a Glass card (×2 Mult, 1 in 4 breaks)"},
+  chariot: {n:"The Chariot", r:"VII", max:1, e:"steel", d:"1 selected card becomes a Steel card (×1.5 Mult while held in hand)"},
+  lovers: {n:"The Lovers", r:"VI", max:1, e:"wild", d:"1 selected card becomes a Wild card (every suit)"},
+  strength: {n:"Strength", r:"XI", max:2, up:1, d:"Raises the rank of up to 2 selected cards by 1"},
+  star: {n:"The Star", r:"XVII", max:3, s:3, d:"Up to 3 selected cards become ♦"},
+  moon: {n:"The Moon", r:"XVIII", max:3, s:2, d:"Up to 3 selected cards become ♣"},
+  sun: {n:"The Sun", r:"XIX", max:3, s:1, d:"Up to 3 selected cards become ♥"},
+  world: {n:"The World", r:"XXI", max:3, s:0, d:"Up to 3 selected cards become ♠"},
+  tutor: {n:"The Tutor", r:"0", max:2, cure:1, d:"Up to 2 selected Again cards are no longer debuffed"},
+  hermit: {n:"The Hermit", r:"IX", max:0, d:"Doubles your money (max $20)", now: () => run.money += Math.min(20, Math.max(0, run.money))},
+  temperance: {n:"Temperance", r:"XIV", max:0, d:"Gives the sell value of all your Jokers (max $50)",
+    now: () => run.money += Math.min(50, run.jokers.reduce((n, j) => n + sellOf(j), 0))},
+};
+
+// Boss blinds: x = target multiplier (other blinds: 1 and 1.5)
+const BOSSES = {
+  hook: {n:"The Hook", col:"#a8283a", d:"Discards 2 random cards from your hand after every hand played"},
+  club: {n:"The Club", col:"#4a8a62", d:"All ♣ cards are debuffed", suit:2},
+  goad: {n:"The Goad", col:"#a04a8c", d:"All ♠ cards are debuffed", suit:0},
+  head: {n:"The Head", col:"#ad6a7a", d:"All ♥ cards are debuffed", suit:1},
+  window: {n:"The Window", col:"#a89a7a", d:"All ♦ cards are debuffed", suit:3},
+  wall: {n:"The Wall", col:"#7a4ab0", d:"Extra large blind", x:4},
+  needle: {n:"The Needle", col:"#5a6a20", d:"Play only 1 hand", x:1},
+  water: {n:"The Water", col:"#9ab0c0", d:"Start with 0 discards"},
+  psychic: {n:"The Psychic", col:"#c8a020", d:"Must play 5 cards"},
+  eye: {n:"The Eye", col:"#3a6ac0", d:"No repeat hand types this round"},
+  flint: {n:"The Flint", col:"#d06020", d:"Base Chips and Mult are halved"},
+  plant: {n:"The Plant", col:"#609070", d:"All face cards are debuffed"},
+  tooth: {n:"The Tooth", col:"#b02020", d:"Lose $1 per card played"},
+  clock: {n:"The Clock", col:"#3a3a8a", d:"Cards lose rank twice as fast while you think"},
+};
+const ANTE = [300, 800, 2000, 5000, 11000, 20000, 35000, 50000];
+const target = (ante = run.ante, blind = run.blind) =>
+  Math.round((ANTE[ante - 1] ?? 50000 * 1.8 ** (ante - 8)) * [1, 1.5, BOSSES[run.boss].x ?? 2][blind]);
+const bossOn = key => !!run && run.blind === 2 && run.boss === key;
+const debuffed = c => (c.d && !hasJ("mulligan")) || (bossOn(run.boss) && BOSSES[run.boss].suit !== undefined && suitIs(c, BOSSES[run.boss].suit))
+  || (bossOn("plant") && face(c));
+
+// Scores a hand: every step is an event {src, t: c|m|x|d, v, chips, mult} for the animation; returns the total too
+function scoreHand(played, held) {
+  const ev = [], ex = evaluate(played);
+  let [chips, mult] = base(ex.type), src = null;
+  const add = (t, v) => {
+    if (t === "c") chips += v; else if (t === "m") mult += v; else if (t === "x") mult *= v;
+    ev.push({src, t, v, chips, mult});
+  };
+  const k = {...ex, played, held, chips: v => add("c", v), mult: v => add("m", v), xmult: v => add("x", v)};
+  played.forEach((c, i) => {
+    if (!ex.scoring.includes(c)) return;
+    src = {card: i};
+    if (debuffed(c)) return ev.push({src, t: "d", chips, mult});
+    add("c", chipsOf(c));
+    if (c.e === "bonus") add("c", 30);
+    if (c.e === "mult") add("m", 4);
+    if (c.e === "glass") add("x", 2);
+    run.jokers.forEach((j, n) => { src = {joker: n, card: i}; JOKERS[j.k].card?.(k, c, j); });
+  });
+  held.forEach((c, i) => { src = {held: i}; if (c.e === "steel" && !debuffed(c)) add("x", 1.5); });
+  run.jokers.forEach((j, n) => { src = {joker: n}; JOKERS[j.k].hand?.(k, j); });
+  return {...ex, ev, chips, mult, total: Math.floor(chips * mult)};
+}
+
+// ---------------------------------------------------------------- pixel art (own, drawn here)
+function pix(map, pal) {
+  let r = "";
+  map.forEach((row, y) => {
+    for (let x = 0; x < row.length;) {
+      let e = x; while (e < row.length && row[e] === row[x]) e++;
+      if (pal[row[x]]) r += `<rect x="${x}" y="${y}" width="${e - x}" height="1" fill="${pal[row[x]]}"/>`;
+      x = e;
+    }
+  });
+  return `<svg viewBox="0 0 ${map[0].length} ${map.length}" shape-rendering="crispEdges">${r}</svg>`;
+}
+const PIPS = [
+  ["...#...", "..###..", ".#####.", "#######", "#######", "#.###.#", "..###.."],
+  [".##.##.", "#######", "#######", ".#####.", "..###..", "...#...", "......."],
+  ["..###..", "..###..", "#######", "#######", "##.#.##", "...#...", "..###.."],
+  ["...#...", "..###..", ".#####.", "#######", ".#####.", "..###..", "...#..."]];
+const pip = s => pix(PIPS[s], {"#": "currentColor"});
+const CROWNS = {13: ["#..#..#", "##.#.##", "#######", ".#####."], 12: ["...#...", ".#.#.#.", "#######", ".#####."],
+  11: ["....##.", "..####.", ".#####.", "#######"]};
+const LAYOUT = {2: [[50, 22], [50, 78]], 3: [[50, 22], [50, 50], [50, 78]], 4: [[32, 22], [68, 22], [32, 78], [68, 78]]};
+LAYOUT[5] = [...LAYOUT[4], [50, 50]];
+LAYOUT[6] = [...LAYOUT[4], [32, 50], [68, 50]];
+LAYOUT[7] = [...LAYOUT[6], [50, 36]];
+LAYOUT[8] = [...LAYOUT[7], [50, 64]];
+LAYOUT[9] = [[32, 20], [68, 20], [32, 40], [68, 40], [50, 50], [32, 60], [68, 60], [32, 80], [68, 80]];
+LAYOUT[10] = [...LAYOUT[9].filter(p => p[1] !== 50), [50, 30], [50, 70]];
+
+function cardHTML(c, cls = "", attrs = "") {
+  const R = rankName(c.r), corner = `${R}${pip(c.s)}`;
+  const mid = c.r === 14 ? `<div class="big" style="width:52%">${pip(c.s)}</div>`
+    : face(c) ? `<div class="big face">${pix(CROWNS[c.r], {"#": "#f5b244"})}${R}</div>`
+    : LAYOUT[c.r].map(([x, y]) => `<span class="pip${y > 50 ? " dn" : ""}" style="left:${x}%;top:${y}%">${pip(c.s)}</span>`).join("");
+  const tag = c.e ? `<i class="etag">${ENH[c.e]}</i>` : "";
+  return `<div class="pc s${c.s} ${c.e || ""} ${debuffed(c) ? "deb" : ""} ${cls}" ${attrs}><span class="cr">${corner}</span><span class="cr br">${corner}</span>${mid}${tag}</div>`;
+}
+const JESTER = ["b..........b", "HH........hh", ".HHH....hhh.", "..HHHHhhhh..", "..HHHHhhhh..", "..ssssssss..",
+  "..sesssses..", "..ssssssss..", "..smssssms..", "...smmmms...", ".cCcCcCcCc..", "..cCcCcCc..."];
+const JKEYS = Object.keys(JOKERS);
+function jokerHTML(key, cls = "", attrs = "") {
+  const i = JKEYS.indexOf(key), hue = (i * 47) % 360, H = `hsl(${hue} 70% 52%)`, h = `hsl(${(hue + 160) % 360} 70% 55%)`;
+  const art = pix(JESTER, {H, h, c: h, C: H, b: "#f5b244", s: "#f4e2c8", e: "#222", m: "#c33"});
+  return `<div class="jk ${cls}" style="background:linear-gradient(hsl(${hue} 35% 30%),hsl(${hue} 40% 18%))" ${attrs}>
+    <div class="art">${art}</div><b class="gl">${JOKERS[key].g}</b><span class="nm">${JOKERS[key].n}</span></div>`;
+}
+const STAR = [".......#.......", "......###......", "#############..", ".###########...", "..#########....", "...#######.....",
+  "..####.####....", ".###.....###...", "##.........##.."].map(r => r.slice(0, 13));
+function tarotHTML(key, cls = "", attrs = "") {
+  const t = TAROTS[key];
+  return `<div class="jk tarot ${cls}" ${attrs}><div class="art" style="width:52%">${pix(STAR, {"#": "#f5d76e"})}</div>
+    <b class="gl">${t.r}</b><span class="nm">${t.n}</span></div>`;
+}
+function planetHTML(type, cls = "", attrs = "") {
+  const i = TYPES.findIndex(t => t[0] === type), hue = (i * 67 + 20) % 360, ring = i % 3 === 1;
+  return `<div class="jk planet ${cls}" ${attrs}><svg viewBox="0 0 40 40" style="width:62%">
+    <circle cx="20" cy="20" r="11" fill="hsl(${hue} 60% 55%)"/><circle cx="16" cy="16" r="4" fill="hsl(${hue} 70% 75%)" opacity=".6"/>
+    ${ring ? `<ellipse cx="20" cy="21" rx="18" ry="4" fill="none" stroke="#f0e0b0" stroke-width="2"/>` : ""}</svg>
+    <b class="gl" style="font-size:calc(var(--cw)*.13)">${TYPE[type][5]}</b><span class="nm">${type}</span></div>`;
+}
+const itemHTML = (it, cls, attrs) => it.t === "joker" ? jokerHTML(it.k, cls, attrs) : it.t === "tarot" ? tarotHTML(it.k, cls, attrs) : planetHTML(it.k, cls, attrs);
+
+// ---------------------------------------------------------------- the swirling background (WebGL, drawn small and pixelated)
+const bg = (() => {
+  const cv = document.getElementById("bg"), gl = cv.getContext("webgl");
+  let want = [[.08, .32, .2], [.13, .45, .3]], cur = want.map(c => [...c]);
+  if (!gl) return {set: () => {}};
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
+  const pr = gl.createProgram();
+  gl.attachShader(pr, sh(gl.VERTEX_SHADER, "attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}"));
+  gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, `precision mediump float;uniform vec2 res;uniform float t;uniform vec3 a,b;
+    void main(){vec2 uv=(gl_FragCoord.xy-.5*res)/res.y;float r=length(uv);float an=atan(uv.y,uv.x)+t*.05-r*2.5;
+      vec2 p=vec2(cos(an),sin(an))*r*5.;
+      for(int i=0;i<5;i++){p+=vec2(sin(p.y*1.2+t*.25),cos(p.x*1.1-t*.2))*.6;}
+      float v=sin(p.x+p.y)*.5+.5;vec3 c=mix(a,b,smoothstep(.3,.55,v));c=mix(c,b*1.35,smoothstep(.82,.95,v));
+      gl_FragColor=vec4(c,1);}`));
+  gl.linkProgram(pr); gl.useProgram(pr);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(pr, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const U = n => gl.getUniformLocation(pr, n), t0 = performance.now();
+  let last = 0;
+  (function frame(now) {
+    requestAnimationFrame(frame);
+    if (document.hidden || now - last < 50) return;   // ~20 fps is plenty for a slow swirl
+    last = now;
+    const w = Math.ceil(innerWidth / 5), h = Math.ceil(innerHeight / 5);
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; gl.viewport(0, 0, w, h); }
+    cur = cur.map((c, i) => c.map((v, j) => v + (want[i][j] - v) * .06));
+    gl.uniform2f(U("res"), w, h); gl.uniform1f(U("t"), (now - t0) / 1000);
+    gl.uniform3fv(U("a"), cur[0]); gl.uniform3fv(U("b"), cur[1]);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  })(0);
+  const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+  return {set(hex) { const c = rgb(hex); want = [c.map(v => v * .45), c.map(v => v * .8)]; }};
+})();
+
+// ---------------------------------------------------------------- state
+// run: the saved run (localStorage joker-run): {deck, ante, blind 0-2, boss, money, jokers [{k, ...}], cons [tarot keys],
+// levels, played, hand [cards], hands, disc, score, seen [types this round], enh {card key: {e, s, up, cure}},
+// stage select|blind|cash|shop|over, shop [items], reroll, reviews, best, won, next}
+let st = {}, decks = [], sel = null, view = "menu", run = null, card = null, phase = "q", shownAt = 0;
+let picked = [], info = null, busy = false, stageHTML = "", overlay = null, empty = false;
+try { sel = localStorage.getItem("deck"); run = JSON.parse(localStorage.getItem("joker-run")); } catch (e) {}
+const $ = id => document.getElementById(id), A = $("app");
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[ch]));
+const fmt = n => Math.round(n).toLocaleString("en-US");
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const left = d => d ? d.new + d.learn + d.due : 0;
+const loadDecks = () => decks = api.decks().filter(d => !(d.name === "Default" && !left(d)));
+const saveRun = () => { try { localStorage.setItem("joker-run", JSON.stringify(run)); } catch (e) {} };
+const pick = a => a[Math.floor(Math.random() * a.length)];
+
+function refresh() {
+  try {
+    st = api.status();
+    if (!st.pkg || !st.anki || !st.media) { view = "setup"; return render(); }
+    if (view === "setup") view = "menu";
+    loadDecks(); syncGame();
+    if (!decks.some(d => d.id === sel)) sel = decks[0]?.id ?? null;
+    if (view === "game" && run?.stage === "blind" && phase === "q" && !busy) step(); else render();
+  } catch (e) { failed(); }
+}
+function failed() {
+  A.innerHTML = `<div class="full"><div class="panel msg"><p>kuma3 isn't answering. Open kuma3 once, then try again.</p>
+    <div class="row"><button class="b-blue" id="again">Try again</button><button class="b-grey" id="op">Open kuma3</button></div></div></div>`;
+  $("again").onclick = refresh; $("op").onclick = () => api.open();
+}
+
+// ---------------------------------------------------------------- views
+function render() {
+  if (view === "setup") return setupView();
+  if (view === "menu") return menuView();
+  gameView();
+}
+
+function setupView() {
+  bg.set("#a8283a");
+  const step = !st.pkg ? `<p>Install kuma3 Anki first. Anki Joker plays with kuma3's cards.</p>`
+    : !st.anki ? `<p>Anki Joker needs permission to read and answer your kuma3 cards.</p><button class="b-blue" id="g">Allow kuma3 access</button>`
+    : `<p>Allow access to all files: the cards' pictures and audio live on the device's storage.</p><button class="b-blue" id="g">Open the setting</button>`;
+  A.innerHTML = `<div class="full"><div class="logo">ANKI<br><span>JOKER</span></div><div class="panel msg">${step}</div></div>`;
+  $("g") && ($("g").onclick = () => st.anki ? api.grantMedia() : api.grantAnki());
+}
+
+function menuView() {
+  bg.set("#c42a40");
+  const num = (n, c) => `<span class="n" style="color:${n ? c : "#567"}">${n}</span>`;
+  const live = run && run.stage !== "over";
+  const rd = live && decks.find(d => d.id === run.deck);
+  A.innerHTML = `<div class="full">
+    <div class="logo">ANKI<br><span>JOKER</span></div>
+    <div>Lv ${level(g.xp) + 1} · ${g.reps}/${g.goal} today${g.streak ? ` · 🔥${g.streak}` : ""}${g.best ? ` · best ante ${g.best}` : ""}</div>
+    <div class="panel decks">${decks.map(d => {
+      const parts = d.name.split("::");
+      return `<button class="${d.id === sel ? "sel" : ""}" data-id="${d.id}"><span class="name" style="padding-left:${16 * (parts.length - 1)}px">${esc(parts.at(-1))}</span>${num(d.new, "#7f9cff")}${num(d.learn, "#e06060")}${num(d.due, "#7fbf6a")}</button>`;
+    }).join("")}</div>
+    <div class="row">
+      ${live ? `<button class="b-blue" id="cont">Continue<br><small style="color:#fff">Ante ${run.ante} · ${esc((rd?.name ?? "").split("::").at(-1))}</small></button>` : ""}
+      <button class="b-orange" id="new">New run</button><button class="b-green" id="sy">Sync</button></div></div>`;
+  A.querySelectorAll("[data-id]").forEach(b => b.onclick = () => {
+    sel = b.dataset.id; try { localStorage.setItem("deck", sel); } catch (e) {}
+    render();
+  });
+  if (live) $("cont").onclick = () => { view = "game"; enter(); };
+  $("new").onclick = () => {
+    if (live && !confirm("Start a new run? Your current run ends.")) return;
+    newRun();
+  };
+  $("sy").onclick = () => api.sync();
+}
+
+function sideHTML() {
+  const bc = blindColor(), b = blindInfo();
+  return `<div class="side panel">
+    <div class="blind" style="--bc:${bc}"><h2>${esc(b.n)}</h2><div class="bd"><div class="token">${b.tok}</div>
+      <div><p>Score at least</p><div class="target">● ${fmt(target())}</div><p>${b.d ? esc(b.d) : `Reward: <span class="c-gold">${"$".repeat(b.pay)}</span>`}</p></div></div></div>
+    <div class="score box"><small>Round score</small><b id="rs">● ${fmt(run.score)}</b></div>
+    <div class="hand box"><div class="ht" id="ht"></div>
+      <div class="cxm"><b class="ch" id="hc">0</b><i>×</i><b class="mu" id="hm">0</b></div></div>
+    <div class="stat s-hands"><small>Hands</small><b class="c-chips" id="hh">${run.hands}</b></div>
+    <div class="stat s-disc"><small>Discards</small><b class="c-mult" id="hd">${run.disc}</b></div>
+    <div class="stat s-money box"><b id="mo">$${run.money}</b></div>
+    <div class="stat s-ante"><small>Ante</small><b class="c-gold">${run.ante}<small>/8</small></b></div>
+    <div class="stat s-round"><small>Round</small><b class="c-gold">${(run.ante - 1) * 3 + run.blind + 1}</b></div>
+    <button class="info b-red" id="ri">Run Info</button><button class="menu b-orange" id="mn">Menu</button></div>`;
+}
+const blindInfo = (blind = run.blind) => blind === 2
+  ? {n: BOSSES[run.boss].n, d: BOSSES[run.boss].d, tok: BOSSES[run.boss].n.split(" ").at(-1)[0], pay: 5}
+  : {n: blind ? "Big Blind" : "Small Blind", tok: blind ? "B" : "S", pay: blind ? 4 : 3};
+const blindColor = (blind = run.blind) => blind === 2 ? BOSSES[run.boss].col : blind ? "#e08a00" : "#0a82d0";
+
+function topHTML() {
+  return `<div class="top">
+    <div class="slots">${run.jokers.map((j, i) => jokerHTML(j.k, info?.kind === "joker" && info.i === i ? "on" : "", `id="jk${i}" data-jk="${i}"`)).join("")}
+      <span class="cnt">${run.jokers.length}/5</span></div>
+    <div class="slots cons">${run.cons.map((t, i) => tarotHTML(t, info?.kind === "cons" && info.i === i ? "on" : "", `data-cs="${i}"`)).join("")}
+      <span class="cnt">${run.cons.length}/2</span></div></div>`;
+}
+
+function gameView() {
+  const s = run.stage;
+  bg.set(s === "shop" || s === "cash" ? "#2a8a5a" : s === "select" ? "#1f6b5a" : s === "over" ? "#5a1018" : blindColor());
+  if (s === "over") return overView();
+  let main;
+  if (s === "select") main = selectHTML();
+  else if (s === "cash") main = cashHTML();
+  else if (s === "shop") main = shopHTML();
+  else main = blindHTML();
+  A.innerHTML = sideHTML() + `<div class="main" id="main">${topHTML()}${main}${infoHTML()}</div>` + (overlay ? overlayHTML() : "");
+  wire();
+  preview();
+  if (s === "blind" && phase !== "pick" && card) {
+    showCard($("face"), phase === "a" ? cardDoc(card.a, sounds(card.q)) : cardDoc(card.q, [], wordHook()));
+    drawTimer();
+  }
+}
+
+function blindHTML() {
+  const drawing = phase !== "pick";
+  const hand = sorted().map((c, i) => cardHTML(c, (picked.includes(c.id) ? "sel " : "") + (c.id === run.fresh ? "deal " : "") + (padOn && !drawing && i === cur ? "cur" : ""), `id="hc${c.id}" data-c="${c.id}"`)).join("")
+    + (drawing && card ? ghostHTML() : "");
+  run.fresh = null;
+  let stage, controls;
+  if (drawing && card) {
+    stage = `<div class="anki"><iframe id="face"></iframe></div>`;
+    controls = phase === "q"
+      ? `<button class="b-blue" id="show">Show answer</button>`
+      : [["Again", "red"], ["Hard", "orange"], ["Good", "blue"], ["Easy", "green"]].map(([b, c], k) =>
+          `<button class="rate b-${c}" data-r="${k + 1}">${b}<small>${esc(card.times[k] ?? "")}</small></button>`).join("");
+  } else {
+    stage = stageHTML || `<div class="hint">${!run.hand.length ? `No cards due in this deck right now.<br>Your run is saved: come back when cards are due.`
+      : empty ? "The deck is out of cards for now: play what you have." : "Pick up to 5 cards"}</div>`;
+    controls = `<button class="b-blue" id="play">Play Hand</button>
+      <div class="sorter">Sort hand<button class="b-orange" data-sort="rank">Rank</button><button class="b-orange" data-sort="suit">Suit</button></div>
+      <button class="b-red" id="disc">Discard</button>`;
+  }
+  return `<div class="stage" id="stage">${stage}</div>
+    ${drawing && card ? `<div class="timer" id="timer"><i></i></div>` : ""}
+    <div class="handrow"><div class="cards" id="cards" style="--n:${Math.max(2, run.hand.length + (drawing && card ? 1 : 0))}">${hand}</div>
+      <div class="deckpile"><div class="back"></div>${left(decks.find(d => d.id === run.deck))} due<br>${run.hand.length}/${HAND_SIZE}</div></div>
+    <div class="controls">${controls}</div>`;
+}
+function ghostHTML() {   // the card you are about to draw: its suit is known, its rank falls while you think
+  const k = card.nid + ":" + card.ord, en = run.enh[k] || {};
+  return `<div class="pc ghost s${en.s ?? suitFor(k)}" id="ghost"><span class="cr" style="color:#fff">?</span><div class="big" id="gr"></div></div>`;
+}
+const sorted = () => [...run.hand].sort(run.sort === "suit" ? (a, b) => a.s - b.s || b.r - a.r : (a, b) => b.r - a.r || a.s - b.s);
+
+function selectHTML() {
+  return `<div class="stage"><div class="blinds">${[0, 1, 2].map(b => {
+    const bi = blindInfo(b), state = b < run.blind ? "past" : b === run.blind ? "now" : "later";
+    return `<div class="bl panel ${state}" style="--bc:${blindColor(b)}"><h3>${esc(bi.n)}</h3><div class="token" style="--bc:${blindColor(b)}">${bi.tok}</div>
+      <p>Score at least</p><div class="target">● ${fmt(target(run.ante, b))}</div>
+      <p>Reward: <span class="c-gold">${"$".repeat(bi.pay)}</span></p>${bi.d ? `<p style="color:#fff">${esc(bi.d)}</p>` : ""}
+      ${state === "now" ? `<button class="b-orange" id="go">Select</button>` : `<p>${state === "past" ? "Defeated" : "Upcoming"}</p>`}</div>`;
+  }).join("")}</div></div>`;
+}
+
+function cashLines() {
+  const lines = [[blindInfo().n, blindInfo().pay]];
+  if (run.hands) lines.push([`Remaining hands (${run.hands})`, run.hands]);
+  const interest = Math.min(5, Math.floor(Math.max(0, run.money) / 5));
+  if (interest) lines.push(["Interest", interest]);
+  run.jokers.forEach(j => JOKERS[j.k].cash && lines.push([JOKERS[j.k].n, JOKERS[j.k].cash]));
+  return lines;
+}
+function cashHTML() {
+  const lines = cashLines(), sum = lines.reduce((n, l) => n + l[1], 0);
+  return `<div class="stage"><div class="cash panel">${lines.map(([n, v]) => `<div><span>${esc(n)}</span><span class="c-gold">${"$".repeat(Math.min(v, 8))}${v > 8 ? `+` : ""} $${v}</span></div>`).join("")}
+    <button class="b-orange" id="cashout" style="width:100%;margin-top:10px;font-size:22px">Cash Out: $${sum}</button></div></div>`;
+}
+
+function shopHTML() {
+  return `<div class="stage"><div class="shop panel">
+    <div class="row"><button class="b-red" id="nextr" style="flex:1">Next Round</button><button class="b-green" id="reroll" style="flex:1" ${run.money < run.reroll ? "disabled" : ""}>Reroll $${run.reroll}</button></div>
+    <div class="goods">${run.shop.map((it, i) => it ? `<div style="position:relative">${itemHTML(it, info?.kind === "shop" && info.i === i ? "on" : "", `data-sh="${i}"`)}<span class="price">$${costOf(it)}</span></div>` : "").join("")
+      || `<div class="hint">Sold out</div>`}</div></div></div>`;
+}
+const costOf = it => it.t === "joker" ? JOKERS[it.k].c : 3;
+
+function infoHTML() {   // the sheet for a tapped joker, tarot or shop item
+  if (!info) return "";
+  let name, desc, btns = "";
+  if (info.kind === "joker") {
+    const j = run.jokers[info.i], J = JOKERS[j.k];
+    name = J.n; desc = J.d + (J.now ? ` (now ${J.now(j)})` : "");
+    btns = `<button class="b-green" id="sell">Sell $${sellOf(j)}</button>${info.i ? `<button class="b-grey" id="mvl">◀ Move</button>` : ""}`;
+  } else if (info.kind === "cons") {
+    const t = TAROTS[run.cons[info.i]];
+    name = t.n; desc = t.d;
+    const ok = t.max === 0 || (run.stage === "blind" && phase === "pick" && picked.length >= 1 && picked.length <= t.max && !busy);
+    btns = `<button class="b-red" id="use" ${ok ? "" : "disabled"}>Use</button><button class="b-green" id="sell">Sell $1</button>`;
+    if (!ok && t.max) desc += ` · select 1-${t.max} cards in your hand first`;
+  } else {
+    const it = run.shop[info.i];
+    name = it.t === "joker" ? JOKERS[it.k].n : it.t === "tarot" ? TAROTS[it.k].n : TYPE[it.k][5];
+    desc = it.t === "joker" ? JOKERS[it.k].d : it.t === "tarot" ? TAROTS[it.k].d
+      : `Levels up ${it.k} (lvl ${run.levels[it.k] || 1} → ${(run.levels[it.k] || 1) + 1}): +${TYPE[it.k][3]} Chips, +${TYPE[it.k][4]} Mult`;
+    const full = it.t === "joker" ? run.jokers.length >= 5 : it.t === "tarot" ? run.cons.length >= 2 : false;
+    btns = `<button class="b-gold" id="buy" ${run.money < costOf(it) || full ? "disabled" : ""}>${full ? "No room" : `Buy $${costOf(it)}`}</button>`;
+  }
+  return `<div class="sheet panel"><h3>${esc(name)}</h3><p>${esc(desc)}</p><div class="row">${btns}<button class="b-grey" id="close">Close</button></div></div>`;
+}
+
+function overlayHTML() {
+  if (overlay === "levels") return `<div class="full" style="position:fixed;inset:0;z-index:45;background:rgba(0,0,0,.7)">
+    <div class="panel levels">${TYPES.map(([n]) => { const [c, m] = base(n); return `<div><span class="c-gold">lvl ${run.levels[n] || 1}</span><span class="nm">${n}</span>
+      <b style="background:var(--chips)">${c}</b>×<b style="background:var(--mult)">${m}</b><small># ${run.played[n] | 0}</small></div>`; }).join("")}</div>
+    <button class="b-orange" id="closeo">Back</button></div>`;
+  return `<div class="full" style="position:fixed;inset:0;z-index:45;background:rgba(0,0,0,.75)">${overlay}</div>`;
+}
+
+function overView() {
+  const won = run.ante > 8;
+  A.innerHTML = `<div class="full"><div class="logo" style="font-size:min(14vw,80px)">${won ? "YOU<br><span>WIN</span>" : "GAME<br><span>OVER</span>"}</div>
+    <div class="panel msg" style="min-width:min(90%,360px)">
+      <p>Ante ${run.ante} · round ${(run.ante - 1) * 3 + run.blind + 1}</p>
+      <p>Best hand <span class="c-mult">● ${fmt(run.best)}</span></p>
+      <p>${run.reviews} cards reviewed this run</p>
+      <div class="row"><button class="b-orange" id="new">New run</button><button class="b-blue" id="menu">Menu</button></div></div></div>`;
+  $("new").onclick = newRun; $("menu").onclick = toMenu;
+}
+
+// ---------------------------------------------------------------- wiring
+function wire() {
+  const on = (id, f) => $(id) && ($(id).onclick = f);
+  on("ri", () => { overlay = "levels"; render(); });
+  on("mn", () => busy || toMenu());
+  on("closeo", () => { overlay = null; render(); });
+  on("go", startBlind);
+  on("show", reveal);
+  on("play", play);
+  on("disc", discard);
+  on("cashout", cashOut);
+  on("nextr", nextRound);
+  on("reroll", () => { if (run.money < run.reroll) return; run.money -= run.reroll; run.reroll++; fillShop(); info = null; blip(600); saveRun(); render(); });
+  on("close", () => { info = null; render(); });
+  on("sell", sell);
+  on("use", useTarot);
+  on("buy", buy);
+  on("mvl", () => { const j = run.jokers; [j[info.i - 1], j[info.i]] = [j[info.i], j[info.i - 1]]; info.i--; saveRun(); render(); });
+  A.querySelectorAll("[data-r]").forEach(b => b.onclick = () => rate(+b.dataset.r));
+  A.querySelectorAll("[data-sort]").forEach(b => b.onclick = () => { run.sort = b.dataset.sort; saveRun(); render(); });
+  A.querySelectorAll("[data-jk]").forEach(b => b.onclick = () => tapItem("joker", +b.dataset.jk));
+  A.querySelectorAll("[data-cs]").forEach(b => b.onclick = () => tapItem("cons", +b.dataset.cs));
+  A.querySelectorAll("[data-sh]").forEach(b => b.onclick = () => tapItem("shop", +b.dataset.sh));
+  A.querySelectorAll("[data-c]").forEach(b => b.onclick = () => toggle(+b.dataset.c));
+}
+function tapItem(kind, i) {
+  if (busy) return;
+  info = info?.kind === kind && info.i === i ? null : {kind, i};
+  if (run.stage === "blind" && phase !== "pick") { refreshInfo(); return; }   // don't redraw the Anki card (it would replay)
+  render();
+}
+function refreshInfo() {   // swaps only the sheet and the outlines
+  A.querySelector(".sheet")?.remove();
+  A.querySelectorAll(".jk.on").forEach(e => e.classList.remove("on"));
+  if (!info) return;
+  A.querySelector(info.kind === "joker" ? `[data-jk="${info.i}"]` : `[data-cs="${info.i}"]`)?.classList.add("on");
+  $("main").insertAdjacentHTML("beforeend", infoHTML());
+  ["close", "sell", "use", "mvl"].forEach(id => $(id) && ($(id).onclick = {close: () => { info = null; refreshInfo(); }, sell, use: useTarot,
+    mvl: () => { const j = run.jokers; [j[info.i - 1], j[info.i]] = [j[info.i], j[info.i - 1]]; info = null; saveRun(); render(); }}[id]));
+}
+
+function toggle(id) {
+  if (busy || run.stage !== "blind" || phase !== "pick") return;
+  const i = picked.indexOf(id);
+  if (i >= 0) picked.splice(i, 1);
+  else if (picked.length < PICK) picked.push(id);
+  else return;
+  $("hc" + id).classList.toggle("sel", picked.includes(id));
+  blip(300 + picked.length * 60, .04);
+  preview();
+  if (info?.kind === "cons") refreshInfo();
+}
+function preview() {   // the side panel shows the selected hand's type and base chips × mult
+  if (!$("ht") || busy) return;
+  const cs = sorted().filter(c => picked.includes(c.id));
+  if (!cs.length || run.stage !== "blind") { $("ht").textContent = ""; $("hc").textContent = 0; $("hm").textContent = 0; return; }
+  const {type} = evaluate(cs), [c, m] = base(type);
+  $("ht").innerHTML = `${type} <small>lvl ${run.levels[type] || 1}</small>`;
+  $("hc").textContent = fmt(c); $("hm").textContent = fmt(m);
+  const pl = $("play");
+  if (pl) {
+    const why = bossOn("psychic") && cs.length < 5 && run.hand.length >= 5 ? "Must play 5 cards"
+      : bossOn("eye") && run.seen.includes(type) ? `Already played ${type}` : "";
+    pl.disabled = !!why; pl.textContent = why || "Play Hand";
+  }
+  if ($("disc")) $("disc").disabled = !run.disc;
+}
+
+// ---------------------------------------------------------------- the run
+function newRun() {
+  if (!sel) return;
+  run = {deck: sel, ante: 1, blind: 0, boss: newBoss(1), money: 4, jokers: [], cons: [], levels: {}, played: {}, hand: [],
+    hands: HANDS, disc: DISCARDS, score: 0, seen: [], enh: {}, stage: "select", shop: [], reroll: 5, reviews: 0, best: 0, next: 1, sort: "rank"};
+  saveRun(); view = "game"; enter();
+}
+function newBoss(ante) {   // The Wall and The Needle wait until ante 2
+  const keys = Object.keys(BOSSES).filter(k => k !== run?.boss && (ante > 1 || !["wall", "needle"].includes(k)));
+  return pick(keys);
+}
+function enter() { info = null; overlay = null; picked = []; stageHTML = ""; if (run.stage === "blind") step(); else render(); }
+function toMenu() { busy = false; view = "menu"; card = null; info = null; overlay = null; try { loadDecks(); } catch (e) {} render(); }
+
+function startBlind() {
+  Object.assign(run, {stage: "blind", score: 0, seen: [], hands: bossOn("needle") ? 1 : HANDS,
+    disc: run.blind === 2 && run.boss === "water" ? 0 : DISCARDS});
+  saveRun(); blip(500); step();
+}
+// After every action in a blind: draw (= review) until the hand is full, then let the player pick
+function step() {
+  cur = Math.min(cur, Math.max(0, run.hand.length - 1));
+  picked = picked.filter(id => run.hand.some(c => c.id === id));
+  stageHTML = "";
+  if (run.hand.length < HAND_SIZE) {
+    try { card = api.next(run.deck); } catch (e) { return failed(); }
+    empty = !card;
+    if (card) { phase = "q"; shownAt = Date.now(); resetTimer(); return render(); }
+  } else card = null;
+  phase = "pick"; render();
+}
+function cardDeleted() { loadDecks(); step(); }   // the card's note was deleted (🗑): draw the next one
+function reveal() { if (!card) return; phase = "a"; thinkMs = clock.on ? clock.ms : 0; render(); }
+
+function rate(e) {
+  if (!card || phase !== "a") return;
+  try { api.answer(card, e, Math.min(Date.now() - shownAt, 60000)); loadDecks(); } catch (err) { return failed(); }
+  xpScore(e);
+  const k = card.nid + ":" + card.ord, en = run.enh[k] || {};
+  const c = {id: run.next++, k, s: en.s ?? suitFor(k), r: Math.min(14, rankFor(thinkMs) + (en.up | 0)), e: en.e, d: e === 1};
+  run.hand.push(c); run.reviews++; run.fresh = c.id;
+  saveRun();
+  e === 1 ? (thud(), buzz("60")) : (swish(), buzz("15"));
+  step();
+}
+
+function discard() {
+  if (busy || !picked.length || !run.disc) return;
+  run.hand = run.hand.filter(c => !picked.includes(c.id));
+  run.disc--; picked = [];
+  run.jokers.forEach(j => { if (j.k === "green") j.m = Math.max(0, (j.m | 0) - 1); });
+  swish(); saveRun(); step();
+}
+
+async function play() {
+  if (busy || !picked.length || run.stage !== "blind") return;
+  const played = sorted().filter(c => picked.includes(c.id)), held = sorted().filter(c => !picked.includes(c.id));
+  if (bossOn("psychic") && played.length < 5 && run.hand.length >= 5) return;
+  const ex = evaluate(played);
+  if (bossOn("eye") && run.seen.includes(ex.type)) return;
+  busy = true; info = null;
+  run.hand = run.hand.filter(c => !picked.includes(c.id)); picked = [];
+  // the played cards go to the middle; the hand keeps the rest
+  stageHTML = `<div class="played" style="--n:${Math.max(2, played.length)}">${played.map((c, i) => cardHTML(c, "deal", `id="pl${i}"`)).join("")}</div><div id="tot"></div>`;
+  render();
+  const res = scoreHand(played, held);
+  $("ht").innerHTML = `${res.type} <small>lvl ${run.levels[res.type] || 1}</small>`;
+  const [c0, m0] = base(res.type);
+  $("hc").textContent = fmt(c0); $("hm").textContent = fmt(m0);
+  $("hh").textContent = run.hands - 1;
+  await wait(450);
+  const dt = res.ev.length > 14 ? 170 : 300;
+  let step_ = 0;
+  for (const e of res.ev) {
+    if (view !== "game") return;
+    const s = e.src, el = s.joker !== undefined ? $("jk" + s.joker) : s.held !== undefined ? $("hc" + held[s.held].id) : $("pl" + s.card);
+    jig(el); if (s.joker !== undefined && s.card !== undefined) jig($("pl" + s.card));
+    if (e.t === "d") popAt(el, "Debuffed", "d");
+    else popAt(el, e.t === "c" ? `+${e.v}` : e.t === "m" ? `+${e.v} Mult` : `×${e.v} Mult`, e.t);
+    $("hc").textContent = fmt(e.chips); $("hm").textContent = fmt(e.mult);
+    bumpEl($(e.t === "c" ? "hc" : "hm"));
+    e.t === "c" ? blip(330 * 2 ** (step_++ / 12), .07) : e.t === "m" ? thunk(170) : e.t === "x" ? (thunk(110), $("main").classList.add("shake"), setTimeout(() => $("main")?.classList.remove("shake"), 350)) : thud();
+    await wait(dt);
+  }
+  if (view !== "game") return;
+  $("tot").innerHTML = `<div class="total">● ${fmt(res.total)}</div>`;
+  chord(); buzz("30,40,30");
+  await wait(500);
+  const from = run.score, to = from + res.total, t0 = performance.now();
+  while (performance.now() - t0 < 600) { $("rs").textContent = "● " + fmt(from + (to - from) * (performance.now() - t0) / 600); await wait(30); }
+  // the hand's consequences
+  run.score = to; run.hands--; run.best = Math.max(run.best, res.total);
+  run.played[res.type] = (run.played[res.type] | 0) + 1; run.seen.push(res.type);
+  if (bossOn("tooth")) run.money -= played.length;
+  for (const c of res.scoring) if (c.e === "glass" && !debuffed(c) && Math.random() < .25) { delete run.enh[c.k].e; noise(.3, 3000, .5); }
+  if (bossOn("hook")) for (let i = 0; i < 2 && run.hand.length; i++) run.hand.splice(Math.floor(Math.random() * run.hand.length), 1);
+  saveRun();
+  await wait(350);
+  busy = false; stageHTML = "";
+  if (run.score >= target()) return winBlind();
+  if (!run.hands) return lose();
+  step();
+}
+
+function winBlind() {
+  card = null; run.stage = "cash"; fanfare(); buzz("40,60,40,60,120");
+  if (run.blind === 2) { mine.antes = (mine.antes | 0) + 1; mine.best = Math.max(mine.best | 0, run.ante); saveGame(); }
+  saveRun(); render();
+}
+function lose() { run.stage = "over"; card = null; sad(); buzz("200,100,300"); saveRun(); render(); }
+
+function cashOut() {
+  run.money += cashLines().reduce((n, l) => n + l[1], 0);
+  run.jokers = run.jokers.filter(j => j.k !== "gros" || Math.random() >= 1 / 6);
+  run.stage = "shop"; run.reroll = 5; fillShop(); coin(); saveRun(); render();
+}
+function fillShop() {
+  const owned = run.jokers.map(j => j.k), shop = [];
+  while (shop.length < 2) {
+    const r = Math.random() * 28;
+    const it = r < 20 ? {t: "joker", k: pick(JKEYS.filter(k => !owned.includes(k) && !shop.some(s => s.k === k)))}
+      : r < 24 ? {t: "tarot", k: pick(Object.keys(TAROTS))}
+      : {t: "planet", k: pick(TYPES.map(t => t[0]).filter(n => !SECRET.includes(n) || run.played[n]))};
+    if (it.k) shop.push(it);
+  }
+  run.shop = shop;
+}
+function buy() {
+  const it = run.shop[info.i], cost = costOf(it);
+  if (run.money < cost) return;
+  if (it.t === "joker") { if (run.jokers.length >= 5) return; run.jokers.push({k: it.k}); }
+  else if (it.t === "tarot") { if (run.cons.length >= 2) return; run.cons.push(it.k); }
+  else run.levels[it.k] = (run.levels[it.k] || 1) + 1;
+  run.money -= cost; run.shop[info.i] = null; info = null; coin(); saveRun(); render();
+}
+function sell() {
+  if (info.kind === "joker") { run.money += sellOf(run.jokers[info.i]); run.jokers.splice(info.i, 1); }
+  else { run.money += 1; run.cons.splice(info.i, 1); }
+  info = null; coin(); saveRun(); render();
+}
+function useTarot() {
+  const t = TAROTS[run.cons[info.i]];
+  if (t.max) {
+    if (!(run.stage === "blind" && phase === "pick" && picked.length >= 1 && picked.length <= t.max)) return;
+    for (const c of run.hand.filter(c => picked.includes(c.id))) {
+      const en = run.enh[c.k] ??= {};
+      if (t.e) c.e = en.e = t.e;
+      if (t.s !== undefined) c.s = en.s = t.s;
+      if (t.up) { c.r = Math.min(14, c.r + 1); en.up = (en.up | 0) + 1; }
+      if (t.cure) c.d = false;
+    }
+  } else t.now();
+  run.cons.splice(info.i, 1); info = null; chime(); saveRun(); render();
+}
+function nextRound() {
+  info = null;
+  run.blind++;
+  if (run.blind === 3) {
+    run.ante++; run.blind = 0; run.boss = newBoss(run.ante);
+    if (run.ante === 9 && !run.won) { run.won = true; overlay = `<div class="logo">YOU<br><span>WIN</span></div><p>You beat ante 8. The run goes on: how deep can you go?</p><button class="b-orange" id="closeo">Keep going</button>`; }
+  }
+  run.stage = "select"; saveRun(); render();
+}
+
+function back() {   // Android back: true when the page handled it
+  if (overlay) { overlay = null; render(); return true; }
+  if (info) { info = null; render(); return true; }
+  if (view === "game") { busy || toMenu(); return true; }
+  return false;
+}
+
+// ---------------------------------------------------------------- controller (8BitDo Micro held upright, the AnKing layout,
+// same as Anki Hunger and Anki XP): MainActivity sends pad(key) with the controller's own button names.
+// Review: X Again, A Hard, Y Good, B Easy (on the question any of them shows the answer); D-pad right/left = scroll
+// the card up/down, up/down do nothing; L1 = word audio, then sentence audio, then the clip; R1 = back to the menu.
+// Picking: D-pad left/right moves the gold cursor, up/A selects, down unselects (A toggles); Y Play Hand, X Discard,
+// B sorts by rank/suit; L1 Run Info, R1 menu. Shop: D-pad left/right picks an item, A buys it, X rerolls, Y next round.
+// Menu: D-pad picks the deck (right/up = up, left/down = down), any face button continues the run or starts one.
+// Blind select, cash out: any face button. An open sheet or overlay: B (or any face button on an overlay) closes it.
+// Tarots stay on the touch screen.
+const FACE = {x: 1, a: 2, y: 3, b: 4};
+let padOn = false, cur = 0;
+function pad(k) {
+  padOn = true;
+  if (view === "setup") return;
+  if (view === "menu") {
+    const n = decks.length, i = decks.findIndex(d => d.id === sel), step = {up: -1, right: -1, down: 1, left: 1}[k];
+    if (step && n) { sel = decks[(i + step + n) % n].id; try { localStorage.setItem("deck", sel); } catch (e) {} render(); A.querySelector(".decks .sel")?.scrollIntoView({block: "nearest"}); }
+    else if (FACE[k]) (run && run.stage !== "over" ? $("cont") : $("new"))?.click();
+    return;
+  }
+  if (busy) return;
+  if (overlay) { if (FACE[k]) { overlay = null; render(); } return; }
+  const s = run.stage;
+  if (info && k === "b") { info = null; return render(); }
+  if (k === "r1") return toMenu();
+  if (s === "over") return k === "a" ? newRun() : FACE[k] && toMenu();
+  if (s === "select" || s === "cash") return FACE[k] && (s === "select" ? startBlind() : cashOut());
+  if (s === "shop") {
+    const n = run.shop.length, i = info?.kind === "shop" ? info.i : -1, step = {left: -1, right: 1}[k];
+    if (step) { let j = i; do j = (j + step + n) % n; while (!run.shop[j] && j !== i && n); if (run.shop[j]) { info = {kind: "shop", i: j}; render(); } }
+    else if (k === "a" && i >= 0) buy();
+    else if (k === "x") $("reroll")?.click();
+    else if (k === "y") nextRound();
+    return;
+  }
+  if (phase !== "pick") {   // reviewing
+    if (!card) return;
+    if (FACE[k]) return phase === "q" ? reveal() : rate(FACE[k]);
+    if (k === "right" || k === "left") return toCard({t: "scroll", dy: k === "right" ? -240 : 240});
+    if (k === "l1") return toCard({t: "replay"});
+    return;
+  }
+  const hand = sorted();
+  if (k === "left" || k === "right") { cur = (cur + (k === "right" ? 1 : -1) + hand.length) % Math.max(1, hand.length); return drawCursor(); }
+  const c = hand[Math.min(cur, hand.length - 1)];
+  if (c && (k === "a" || (k === "up") !== picked.includes(c.id) && (k === "up" || k === "down"))) return toggle(c.id);
+  if (k === "y") return play();
+  if (k === "x") return discard();
+  if (k === "b") { run.sort = run.sort === "suit" ? "rank" : "suit"; saveRun(); render(); }
+  if (k === "l1") { overlay = "levels"; render(); }
+}
+function drawCursor() { A.querySelectorAll("#cards .pc").forEach((e, i) => e.classList.toggle("cur", i === cur)); }
+
+
+// ---------------------------------------------------------------- the Anki card
+function cardDoc(html, skip, head = "") {
+  let first = true;
+  html = html.replace(/\[sound:([^\]]+)\]/g, (m, f) => {
+    const auto = first && !skip.includes(f); if (auto) first = false;
+    const src = esc(encodeURI(f));
+    return /\.(mp4|webm|mkv|mov|m4v)$/i.test(f)
+      ? `<video src="${src}" controls playsinline ${auto ? "autoplay" : ""}></video>`
+      : `<audio src="${src}" controls ${auto ? "autoplay" : ""}></audio>`;
+  });
+  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"><base href="${esc(st.mediaBase)}"><script>(${cardHelper})()<\/script>
+${head}<style>${card.css || ""}</style><style>html,body,.card{background:transparent!important;color:#f4f0e6!important}html{color-scheme:dark}
+body{margin:0;padding:10px}img,video{max-width:100%;height:auto}</style></head>
+<body class="card card${card.ord + 1}">${html}</body></html>`;
+}
+const sounds = html => [...(html || "").matchAll(/\[sound:([^\]]+)\]/g)].map(m => m[1]);
+
+// ---------------------------------------------------------------- stats shared with Anki XP and Anki Hunger
+// Anki XP's format and rules (apps/anki-xp/src/main/assets/index.html, keep them in step): this app writes its own
+// part {xp, record, goal: [reps, set at ms], days: {day: {reps, fast, best, xp, got, goal}}, antes, best} to the kuma3
+// progress note of device "<model>-joker-…"; `g` is every part merged, so all the apps show the same XP, level, daily
+// reps and streak. Again = 2 XP, else 10 XP × (1 + combo/5, max 5) × 1.5 after the daily goal. The combo grows on
+// Hard/Good/Easy within FAST ms of the word audio ending (Anki XP's clock); Again or the clock running out breaks it.
+let mine = {xp: 0, record: 0, goal: [100, 0], days: {}, antes: 0, best: 0}, others = {}, g, combo = 0;
+let device = ""; try { device = localStorage.getItem("joker-device") || ""; mine = JSON.parse(localStorage.getItem("joker-mine")) || mine; } catch (e) {}
+if (!device) {
+  device = `${api.model()}-joker-${Math.random().toString(36).slice(2, 8)}`;
+  try { localStorage.setItem("joker-device", device); } catch (e) {}
+}
+function dayKey(back = 0) {   // Anki's day starts at 4 am
+  const t = new Date(Date.now() - 4 * 3600e3 - back * 86400e3);
+  return `${t.getFullYear()}-${t.getMonth() + 1}-${t.getDate()}`;
+}
+function merge() {
+  const parts = [mine, ...Object.values(others)], day = dayKey();
+  const sum = k => parts.reduce((n, p) => n + (p.days?.[k]?.reps | 0), 0);
+  let streak = 0;   // days in a row with a review, up to today (or yesterday: today still has time); no freezes
+  for (let i = sum(day) ? 0 : 1; sum(dayKey(i)); i++) streak++;
+  return {xp: parts.reduce((n, p) => n + (p.xp | 0), 0), best: Math.max(...parts.map(p => p.best | 0)),
+    record: Math.max(...parts.map(p => p.record | 0)), goal: parts.map(p => p.goal || [100, 0]).reduce((x, y) => y[1] > x[1] ? y : x)[0],
+    reps: sum(day), streak};
+}
+g = merge();
+function saveGame() {
+  g = merge();
+  const text = JSON.stringify(mine);
+  try { localStorage.setItem("joker-mine", text); } catch (e) {}
+  try { api.progressWrite(device, text); } catch (e) {}   // kuma3 not answering: the next save writes it
+}
+function syncGame() {   // everyone else's parts (at start and when coming back to the app)
+  try { const all = api.progressRead(); delete all[device]; others = all; } catch (e) {}
+  saveGame();
+}
+const level = xp => Math.floor((Math.sqrt(1 + 0.08 * xp) - 1) / 2);   // level L starts at 50·L·(L+1) XP
+const xpMult = () => Math.min(5, 1 + Math.floor(combo / 5)) * (g.reps >= g.goal ? 1.5 : 1);
+function xpScore(ease) {
+  const fast = thinkMs < FAST;
+  if (ease === 1 || !fast) combo = 0; else combo++;
+  const xp = ease === 1 ? 2 : Math.round(10 * xpMult());
+  const t = mine.days[dayKey()] ??= {reps: 0, fast: 0, best: 0, xp: 0, got: [], goal: g.goal};
+  t.reps++; t.fast += fast && ease > 1; t.best = Math.max(t.best, combo); t.xp += xp; t.goal = g.goal;
+  mine.xp += xp; mine.record = Math.max(mine.record, combo);
+  saveGame();
+}
+
+// ---------------------------------------------------------------- the combo clock (Anki XP's), which also sets the rank
+// Starts when the front's word audio ends (the card plays it through its own Web Audio player, hooked in wordHook),
+// right away on a card without word audio, or after 5 s if the word audio never reports back. Counts only while the
+// app is in front (deltas over 250 ms don't count). Running out breaks the combo; the card itself just waits.
+const FAST = 10000;
+let clock = {tok: 0, on: false, ms: 0, last: 0}, thinkMs = 1e9;
+const wordFile = q => /data-audio="word"[\s\S]*?\[audio:\s*([^\]]+?)\s*\]/.exec(q || "")?.[1];
+function resetTimer() {
+  clock = {tok: clock.tok + 1, on: false, ms: 0, last: performance.now()};
+  const tok = clock.tok;
+  if (!wordFile(card?.q)) clock.on = true;
+  else setTimeout(() => wordDone(tok), 5000);
+}
+function wordDone(tok) { if (tok === clock.tok && !clock.on) { clock.on = true; clock.last = performance.now(); drawTimer(); } }
+function wordHook() {   // a script for the front's <head>: tells this page when the word audio has played
+  const w = wordFile(card?.q);
+  if (!w) return "";
+  return `<script>(function(){var W=${JSON.stringify(w)},T=${clock.tok},f;
+function done(){parent.postMessage({t:"word",tok:T},"*")}
+Object.defineProperty(window,'__playMobile',{configurable:true,get:function(){return f},set:function(g){f=function(src){
+var r=g.apply(this,arguments),s=String(src);try{s=decodeURIComponent(s)}catch(e){}
+if(s.indexOf(W)>=0&&r&&r.then)r.then(done,done);return r}}})})();<\/script>`;
+}
+function drawTimer() {
+  const t = $("timer"); if (!t) return;
+  const rest = Math.max(0, FAST - clock.ms);
+  t.className = "timer" + (phase !== "q" ? " off" : !clock.on ? " wait" : rest <= 3000 ? " low" : "");
+  t.firstChild.style.width = (clock.on ? 100 * rest / FAST : 100) + "%";
+  const gr = $("gr");
+  if (gr) gr.textContent = rankName(phase === "q" ? rankFor(clock.on ? clock.ms : 0) : rankFor(thinkMs));
+}
+setInterval(() => {
+  const now = performance.now(), dt = now - clock.last; clock.last = now;
+  if (view !== "game" || !card || phase !== "q" || !clock.on || dt > 250) return;
+  clock.ms += dt;
+  if (clock.ms >= FAST) combo = 0;
+  drawTimer();
+}, 100);
+
+// ---------------------------------------------------------------- juice: pop-ups, sounds, buzz
+function popAt(el, text, t) {
+  if (!el) return;
+  const r = el.getBoundingClientRect(), p = document.createElement("div");
+  p.className = "pop " + t; p.textContent = text;
+  p.style.left = r.left + r.width / 2 + "px"; p.style.top = r.top + "px";
+  document.body.append(p); setTimeout(() => p.remove(), 750);
+}
+function jig(el) { if (!el) return; el.classList.remove("jig"); void el.offsetWidth; el.classList.add("jig"); }
+function bumpEl(el) { if (!el) return; el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); }
+let ac;
+function tone(f, secs, type = "square", vol = .08, to = f) {
+  try {
+    ac ||= new AudioContext();
+    const o = ac.createOscillator(), gn = ac.createGain(), t = ac.currentTime;
+    o.type = type; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(to, t + secs);
+    gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(.0001, t + secs);
+    o.connect(gn).connect(ac.destination); o.start(t); o.stop(t + secs);
+  } catch (e) {}
+}
+function noise(secs, freq, vol) {
+  try {
+    ac ||= new AudioContext();
+    const n = Math.floor(ac.sampleRate * secs), buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 2;
+    const src = ac.createBufferSource(), f = ac.createBiquadFilter(), gn = ac.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; gn.gain.value = vol;
+    src.connect(f).connect(gn).connect(ac.destination); src.start();
+  } catch (e) {}
+}
+const blip = (f, v = .06) => tone(f, .08, "square", v, f * 1.02);
+const thunk = f => { tone(f, .18, "sawtooth", .1, f / 2); noise(.08, 400, .3); };
+const thud = () => tone(140, .25, "triangle", .2, 60);
+const swish = () => noise(.12, 2500, .5);
+const coin = () => { tone(988, .08, "square", .06); setTimeout(() => tone(1319, .25, "square", .06), 80); };
+const chime = () => [523, 659, 784].forEach((f, i) => setTimeout(() => tone(f, .2, "triangle", .1), i * 60));
+const chord = () => [262, 330, 392, 523].forEach(f => tone(f, .5, "triangle", .06));
+const fanfare = () => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, .18, "square", .07), i * 110));
+const sad = () => [392, 349, 311, 262].forEach((f, i) => setTimeout(() => tone(f, .35, "triangle", .12), i * 220));
+function buzz(p) { try { api.vibrate(p); } catch (e) {} }
+
+// ---------------------------------------------------------------- self-check: open the page with ?test
+function selfTest() {
+  const keep = run;
+  run = {jokers: [], levels: {}, played: {}, money: 0, disc: 0, blind: 0, boss: "hook", reviews: 0};
+  const C = (r, s, e) => ({r, s, e}), eq = (a, b, m) => { if (a !== b) throw new Error(`${m}: ${a} !== ${b}`); };
+  eq(evaluate([C(14, 0), C(2, 1), C(3, 0), C(4, 2), C(5, 3)]).type, "Straight", "wheel");
+  eq(evaluate([C(9, 1), C(2, 1), C(13, 0, "wild"), C(4, 1), C(7, 1)]).type, "Flush", "wild flush");
+  eq(evaluate([C(9, 1), C(9, 2), C(4, 0), C(4, 1)]).type, "Two Pair", "two pair");
+  eq(evaluate([C(9, 1), C(9, 2), C(9, 0), C(4, 1), C(4, 3)]).type, "Full House", "full house");
+  eq(evaluate([C(9, 1), C(9, 1), C(9, 1), C(9, 1), C(9, 1)]).type, "Flush Five", "flush five");
+  eq(evaluate([C(12, 0), C(5, 1)]).scoring.length, 1, "high card scores one card");
+  run.jokers = [{k: "joker"}];
+  eq(scoreHand([C(13, 0), C(13, 1), C(4, 2)], []).total, (10 + 10 + 10) * (2 + 4), "pair of kings + Joker");
+  eq(scoreHand([{r: 13, s: 0, d: true}, C(13, 1)], []).total, (10 + 10) * (2 + 4), "debuffed card doesn't score");
+  run.jokers = [{k: "joker"}, {k: "speed"}]; run.levels = {Pair: 2};
+  eq(scoreHand([C(14, 0, "glass"), C(14, 1)], [C(5, 2, "steel")]).total, Math.floor((25 + 22) * ((3 * 2 * 1.5 + 4) * 2)), "glass, steel, levels, ×2");
+  run = keep;
+  return "ok";
+}
+document.addEventListener("keydown", e => {
+  const k = {ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", j: "a", k: "b", u: "x", i: "y", q: "l1", e: "r1"}[e.key];
+  if (k) { e.preventDefault(); pad(k); }
+});
+if (P.has("test")) console.log("selfTest", selfTest());
+
+refresh();
+</script>
+</body>
+</html>

@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>kuma3 Anki</title>
+<style>
+/* kuma3 Anki's own look (AnkiDroid's dark theme): deck list, drawer, reviewer and answer buttons */
+:root{--bg:#303030;--bar:#3a3a3a;--row:#303030;--sel:#3c3c3c;--ink:#fff;--dim:#9e9e9e;--zero:#5a5a5a;
+  --new:#9fa8f0;--learn:#ef6c6c;--due:#9ccc9c;--fab:#1188d8;--again:#c62828;--hard:#616161;--good:#2e7d32;--easy:#1565c0;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:16px Roboto,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+body{display:flex;flex-direction:column;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+header{flex:none;display:flex;align-items:center;gap:8px;min-height:64px;padding:max(8px,env(safe-area-inset-top)) 8px 8px 4px;background:var(--bar)}
+header .ib{width:48px;height:48px;display:grid;place-items:center;border-radius:50%}
+header .ib:active{background:#ffffff1a}
+header svg{width:24px;height:24px;fill:currentColor}
+.titles{flex:1;min-width:0}
+.titles b{display:block;font-size:22px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.titles small{display:block;font-size:15px;color:#ddd}
+main{flex:1;min-height:0;overflow:auto;position:relative}
+/* deck list */
+.deck{display:flex;align-items:center;min-height:56px;padding:0 16px 0 0;border-bottom:1px solid #ffffff08}
+.deck.sel{background:var(--sel)}
+.deck .tw{flex:none;width:48px;height:56px;display:grid;place-items:center;color:#ddd}
+.deck .tw svg{width:24px;height:24px;fill:currentColor}
+.deck .name{flex:1;min-width:0;font-size:19px;font-weight:700;padding:14px 0;overflow-wrap:anywhere}
+.deck .counts{flex:none;display:flex;gap:10px;font-size:17px}
+.counts .n{color:var(--new)}.counts .l{color:var(--learn)}.counts .d{color:var(--due)}.counts .z{color:var(--zero)}
+.today{flex:none;text-align:center;padding:12px 16px max(12px,env(safe-area-inset-bottom));color:#eee;font-size:15px}
+.fab{position:fixed;right:24px;bottom:calc(64px + env(safe-area-inset-bottom));width:64px;height:64px;border-radius:18px;
+  background:var(--fab);display:grid;place-items:center;box-shadow:0 3px 8px #0008}
+.fab svg{width:30px;height:30px;fill:#fff}
+/* drawer */
+.veil{position:fixed;inset:0;background:#0008;z-index:5}
+.drawer{position:fixed;top:0;bottom:0;left:0;width:min(320px,80vw);background:#2f3236;z-index:6;overflow:auto;box-shadow:2px 0 10px #0008}
+.drawer .art{height:150px;background:linear-gradient(160deg,#0a6fc2,#5aa6dc);clip-path:polygon(0 0,100% 0,100% 72%,72% 100%,0 100%)}
+.drawer button{display:flex;align-items:center;gap:24px;width:100%;padding:16px 24px;font-size:18px;text-align:left}
+.drawer button.on{background:#ffffff14;color:#64b5f6}
+.drawer button svg{width:24px;height:24px;fill:currentColor;flex:none}
+.drawer small{display:block;color:var(--dim);font-size:13px}
+.drawer hr{border:0;border-top:1px solid #ffffff30;margin:8px 24px}
+/* reviewer */
+.rcounts{display:flex;gap:12px;font-size:20px}
+.rcounts .cur{text-decoration:underline;text-underline-offset:4px}
+#face{flex:1;width:100%;border:0;background:var(--bg);display:block;height:100%}
+.answer{flex:none;display:flex;gap:4px;padding:4px 4px max(4px,env(safe-area-inset-bottom));background:var(--bg)}
+.answer button{flex:1;min-height:64px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:17px}
+.answer button small{font-size:13px;opacity:.9}
+.answer .show{background:#424242}
+.b1{background:var(--again)}.b2{background:var(--hard)}.b3{background:var(--good)}.b4{background:var(--easy)}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:#3a3a3a;z-index:6;border-radius:16px 16px 0 0;padding:8px 0 max(8px,env(safe-area-inset-bottom))}
+.sheet h3{margin:12px 24px;font-weight:500}
+.sheet button{display:flex;align-items:center;gap:24px;width:100%;padding:14px 24px;font-size:17px;text-align:left}
+.sheet button svg{width:24px;height:24px;fill:currentColor}
+.find{flex:1;min-width:0;height:44px;border:0;border-radius:22px;padding:0 16px;background:#ffffff1a;color:#fff;font:inherit;font-size:17px;outline:none}
+.hit{display:block;width:100%;padding:12px 16px;border:0;border-bottom:1px solid #ffffff10;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.hit small{display:block;color:var(--dim);font-size:13px;margin-top:2px}
+.more{display:block;margin:12px auto max(12px,env(safe-area-inset-bottom));padding:12px 20px;border-radius:8px;background:var(--fab)}
+.msg{padding:32px 24px;text-align:center;line-height:1.5}
+.msg h2{font-weight:400}
+.msg .btn{display:inline-block;margin:8px;padding:12px 20px;border-radius:8px;background:var(--fab)}
+</style>
+</head>
+<body>
+<header id="bar"></header>
+<main id="main"></main>
+<div id="foot"></div>
+<div id="layer"></div>
+<script src="../shared.js"></script>
+<script>
+const mock = (() => {
+  const decks = [
+    {id: "1", name: "Deutsch", new: 0, learn: 0, due: 23},
+    {id: "2", name: "Deutsch::Core 1000", new: 12, learn: 0, due: 28, cards: [
+      ["Ich hab keine Ahnung.", "Ich hab keine Ahnung.<hr>I have no idea.<br><i>Ahnung = idea, clue</i>"],
+      ["Es ist nicht weit.", "Es ist nicht weit.<hr>It's not far.<br><i>weit = far</i>"]]},
+    {id: "3", name: "Deutsch::Grammatik A1", new: 0, learn: 0, due: 5, cards: [["der, die oder das? ___ Tisch", "der Tisch"]]},
+    {id: "4", name: "Deutsch::Mined", new: 0, learn: 0, due: 0},
+    {id: "5", name: "English", new: 0, learn: 0, due: 0}, {id: "6", name: "English::Core 1000", new: 0, learn: 0, due: 0},
+    {id: "7", name: "Japanese", new: 0, learn: 0, due: 0}, {id: "8", name: "kumapie", new: 0, learn: 0, due: 0}];
+  let n = 0;
+  return {
+    status: () => ({pkg: "example", anki: true, media: true, mediaBase: ""}),
+    decks: () => decks.map(({cards, ...d}) => d),
+    next(id) {
+      const d = decks.find(x => x.id === id);
+      if (!d?.cards || !(d.new + d.learn + d.due)) return null;
+      const [q, a] = d.cards[n++ % d.cards.length];
+      return {nid: String(n), ord: 0, css: ".card{font-size:26px;text-align:center}", q, a, times: ["<10m", "1d", "3d", "8d"]};
+    },
+    answer() { const d = decks.find(x => x.id === sel); d.due && d.due--; },
+    sync() { alert("In the app this asks kuma3 to sync with AnkiWeb."); },
+    open() { alert("In the app this opens kuma3."); }, screen(s) { alert(`In the app this opens kuma3's ${s} screen.`); }, skins() { alert("In the app this opens the skin picker."); }, settings() { alert("In the app this opens kuma3 Skins' settings."); },
+    search: q => decks.flatMap(d => d.cards || []).map(([f], i) => ({nid: String(i + 1), sfld: f, tags: ""})).filter(n => n.sfld.toLowerCase().includes(q.toLowerCase())),
+    browse(q) { alert(`In the app this opens kuma3's browser on "${q}".`); }, edit() { alert("In the app this opens kuma3's note editor."); },
+    today: () => null, undoLabel: () => "", undo: () => 0, setCollapsed() {},
+    grantAnki() {}, grantMedia() {}
+  };
+})();
+const api = B ? {
+  status: () => JSON.parse(B.status()), decks: () => JSON.parse(B.decks()), next: id => JSON.parse(B.next(id)),
+  answer: (c, ease, ms) => B.answer(c.nid, c.ord, ease, ms), sync: () => B.sync(), open: () => B.openAnki(),
+  search: q => JSON.parse(B.searchNotes(q)), browse: q => B.browse(q), edit: nid => B.editNote(nid, 0),
+  today: () => JSON.parse(B.today()), undoLabel: () => B.undoLabel(), undo: () => B.undo(),
+  setCollapsed: (id, c) => B.setCollapsed(id, c ? 1 : 0),
+  skins: () => B.useSkin(""), settings: () => B.settings(1), screen: (s, did) => B.openScreen(s, did ?? ""), grantAnki: () => B.grantAnki(), grantMedia: () => B.grantMedia()
+} : mock;
+
+// ---------------------------------------------------------------- state
+let query = "", hits = null;   // the card search (view "search")
+let st = {}, decks = [], sel = null, view = "decks", card = null, shown = false, shownAt = 0, drawer = false, sheet = null;   // sheet = deck id of the long-press menu
+const store = (k, v) => { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } };
+// collapsed decks: kuma3's own deck-list state (d.collapsed); an older kuma3 doesn't give it, then this skin's (localStorage)
+let collapsed = store("anki-collapsed") || {};
+const isCollapsed = d => typeof d.collapsed === "boolean" ? d.collapsed : !!collapsed[d.id];
+function toggleCollapsed(id) {
+  const d = decks.find(x => x.id === id);
+  if (typeof d.collapsed === "boolean") { d.collapsed = !d.collapsed; api.setCollapsed(id, d.collapsed); }
+  else { collapsed[id] = !collapsed[id]; store("anki-collapsed", collapsed); }
+}
+sel = store("deck");
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[ch]));
+const deck = () => decks.find(d => d.id === sel);
+const left = d => d ? d.new + d.learn + d.due : 0;
+const depth = d => d.name.split("::").length - 1;
+const hasKids = (d, i) => decks[i + 1]?.name.startsWith(d.name + "::");
+// today in this skin, for an older kuma3 without kuma3/today (which counts every app, like its deck list)
+const day = () => new Date().toDateString();
+let today = store("anki-today"); if (today?.day !== day()) today = {day: day(), n: 0, ms: 0};
+
+const ICON = {
+  menu: "M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z",
+  back: "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
+  sync: "M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z",
+  replay: "M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z",
+  down: "M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z",
+  right: "M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z",
+  plus: "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z",
+  decks: "M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z",
+  browser: "M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z",
+  stats: "M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z",
+  skins: "M12 3a9 9 0 0 0 0 18c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z",
+  settings: "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z",
+  study: "M8 5v14l11-7z",
+  search: "M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
+  undo: "M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z",
+  anki: "M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"};
+const svg = k => `<svg viewBox="0 0 24 24"><path d="${ICON[k]}"/></svg>`;
+const num = (n, cls) => `<span class="${n ? cls : "z"}">${n}</span>`;
+
+// ---------------------------------------------------------------- views
+function render() {
+  ({decks: decksView, review: reviewView, search: searchView, setup: setupView, error: errorView})[view]();
+  $("layer").innerHTML = drawer ? drawerHTML() : sheet ? sheetHTML() : "";
+  if (drawer) wireDrawer();
+  if (sheet) wireSheet();
+}
+function bar(left, title, sub, right = "") {
+  $("bar").innerHTML = `${left}<div class="titles"><b>${esc(title)}</b>${sub ? `<small>${sub}</small>` : ""}</div>${right}`;
+}
+function decksView() {
+  const due = decks.filter(d => !depth(d)).reduce((s, d) => s + left(d), 0);
+  bar(`<button class="ib" id="menu">${svg("menu")}</button>`, "kuma3 Anki", `${due} card${due === 1 ? "" : "s"} due`,
+    `<button class="ib" id="fs">${svg("search")}</button><button class="ib" id="sy">${svg("sync")}</button>`);
+  let hide = null;
+  $("main").innerHTML = decks.map((d, i) => {
+    if (hide && d.name.startsWith(hide)) return "";
+    hide = isCollapsed(d) && hasKids(d, i) ? d.name + "::" : null;
+    const tw = hasKids(d, i) ? `<button class="tw" data-tw="${d.id}">${svg(isCollapsed(d) ? "right" : "down")}</button>` : `<span class="tw"></span>`;
+    return `<div class="deck${d.id === sel ? " sel" : ""}" data-id="${d.id}" style="padding-left:${depth(d) * 28}px">${tw}
+      <div class="name">${esc(d.name.split("::").at(-1))}</div>
+      <div class="counts">${num(d.new, "n")}${num(d.learn, "l")}${num(d.due, "d")}</div></div>`;
+  }).join("") + `<div style="height:96px"></div>`;
+  $("foot").innerHTML = `<button class="fab" id="add" aria-label="Add">${svg("plus")}</button><div class="today">${studiedLine()}</div>`;
+  $("menu").onclick = () => { drawer = true; render(); };
+  $("sy").onclick = () => api.sync();
+  $("fs").onclick = () => { view = "search"; render(); $("q").focus(); };
+  $("add").onclick = () => api.screen("add", sel);   // kuma3's note editor, on the selected deck
+  $("main").querySelectorAll(".deck").forEach(r => r.onclick = e => {
+    const tw = e.target.closest("[data-tw]");
+    if (tw) { toggleCollapsed(tw.dataset.tw); return render(); }
+    pick(r.dataset.id); study();
+  });
+  $("main").querySelectorAll(".deck").forEach(r => r.oncontextmenu = e => { e.preventDefault(); pick(r.dataset.id); sheet = r.dataset.id; render(); });
+}
+function pick(id) { sel = id; store("deck", sel); }
+// kuma3's deck-list line, "Studied 229 cards in 37.55 minutes today (9.84s/card)" (rslib's wording and units)
+function studiedLine() {
+  let t = null; try { t = api.today(); } catch (e) {}
+  const here = !t; if (here) t = {cards: today.n, seconds: today.ms / 1000};
+  const n2 = x => String(+x.toFixed(2));
+  const span = t.seconds < 60 ? `${n2(t.seconds)} second${t.seconds === 1 ? "" : "s"}` : `${n2(t.seconds / 60)} minute${t.seconds === 60 ? "" : "s"}`;
+  return `Studied ${t.cards} card${t.cards === 1 ? "" : "s"} in ${span} today${here ? " here" : ""} (${n2(t.cards ? t.seconds / t.cards : 0)}s/card)`;
+}
+function reviewView() {
+  const d = deck();
+  const q = card?.queue, cur = k => q === k ? " cur" : "";   // the count the card comes from (kuma3_queue)
+  const counts = d ? `<div class="rcounts"><span class="${d.new ? "n" : "z"}${cur("new")}">${d.new}</span><span class="${d.learn ? "l" : "z"}${cur("learn")}">${d.learn}</span><span class="${d.due ? "d" : "z"}${cur("review")}">${d.due}</span></div>` : "";
+  let undo = ""; try { undo = api.undoLabel(); } catch (e) {}
+  bar(`<button class="ib" id="bk">${svg("back")}</button>`, d ? d.name.split("::").at(-1) : "", "",
+    `${counts}${undo ? `<button class="ib" id="un" title="${esc(undo)}">${svg("undo")}</button>` : ""}<button class="ib" id="rp">${svg("replay")}</button>`);
+  $("bk").onclick = leaveDeck;
+  if (undo) $("un").onclick = undoLast;
+  $("rp").onclick = () => toCard({t: "replay"});
+  if (!card) {
+    $("main").innerHTML = `<div class="msg"><h2>Congratulations!</h2><p>You have finished this deck for now.</p>
+      <button class="btn" id="dk">Decks</button></div>`;
+    $("foot").innerHTML = "";
+    $("dk").onclick = leaveDeck;
+    return;
+  }
+  $("main").innerHTML = `<iframe id="face"></iframe>`;
+  showCard($("face"), shown ? cardDoc(typeA(card.a), sounds(card.q)) : cardDoc(typeQ(card.q), []));
+  $("foot").innerHTML = `<div class="answer">${shown
+    ? ["Again", "Hard", "Good", "Easy"].map((b, k) => `<button class="b${k + 1}" data-r="${k + 1}"><small>${esc(card.times?.[k] ?? "")}</small>${b}</button>`).join("")
+    : `<button class="show" id="show">Show answer</button>`}</div>`;
+  if (shown) $("foot").querySelectorAll("[data-r]").forEach(b => b.onclick = () => rate(+b.dataset.r));
+  else $("show").onclick = reveal;
+}
+// a quick search with Anki's syntax ("deck:Deutsch vorbei"): tap a note to edit it in kuma3; the full browser is kuma3's
+function searchView() {
+  $("bar").innerHTML = `<button class="ib" id="bk">${svg("back")}</button><input class="find" id="q" type="search" enterkeyhint="search"
+    placeholder="Search cards" value="${esc(query)}" autocomplete="off" autocapitalize="off" spellcheck="false">`;
+  const text = h => new DOMParser().parseFromString(h, "text/html").body.textContent.trim();
+  $("main").innerHTML = hits === null ? `<div class="msg"><p>Anki search, for example <b>vorbei</b>, <b>deck:Deutsch</b>, <b>tag:leech</b>, <b>flag:1</b>.</p></div>`
+    : !hits.length ? `<div class="msg"><p>No cards match.</p></div>`
+    : hits.map(n => `<button class="hit" data-nid="${n.nid}">${esc(text(n.sfld) || "(empty)")}${n.tags.trim() ? `<small>${esc(n.tags.trim())}</small>` : ""}</button>`).join("")
+      + (hits.length === 200 ? `<div class="msg"><p>The first 200: narrow the search, or open it in kuma3.</p></div>` : "");
+  $("foot").innerHTML = query ? `<button class="more" id="full">Open in kuma3's browser</button>` : "";
+  $("bk").onclick = () => { view = "decks"; render(); };
+  $("q").onkeydown = e => { if (e.key === "Enter") { query = e.target.value.trim(); try { hits = query ? api.search(query) : null; } catch (err) { hits = []; } render(); } };
+  $("main").querySelectorAll(".hit").forEach(b => b.onclick = () => api.edit(b.dataset.nid));
+  if ($("full")) $("full").onclick = () => api.browse(query);
+}
+function setupView() {
+  bar(`<span style="width:12px"></span>`, "kuma3 Anki", "");
+  const step = !st.pkg ? `<p>Install kuma3 Anki first: this skin shows and answers its cards.</p>`
+    : !st.anki ? `<p>Allow access to your kuma3 cards.</p><button class="btn" id="g">Allow</button>`
+    : `<p>Allow access to all files, for card images and audio.</p><button class="btn" id="g">Allow</button>`;
+  $("main").innerHTML = `<div class="msg"><h2>Welcome</h2>${step}</div>`;
+  $("foot").innerHTML = "";
+  if ($("g")) $("g").onclick = () => st.anki ? api.grantMedia() : api.grantAnki();
+}
+function errorView() {
+  bar(`<span style="width:12px"></span>`, "kuma3 Anki", "");
+  $("main").innerHTML = `<div class="msg"><h2>kuma3 isn't answering</h2><p>Open kuma3 once, then try again.</p>
+    <button class="btn" id="again">Try again</button><button class="btn" id="op">Open kuma3</button></div>`;
+  $("foot").innerHTML = "";
+  $("again").onclick = refresh; $("op").onclick = () => api.open();
+}
+// the side menu: browser, statistics and settings are kuma3's own screens
+function drawerHTML() {
+  const item = (id, icon, label, sub = "", on = false) => `<button id="${id}" class="${on ? "on" : ""}">${svg(icon)}<span>${label}${sub ? `<small>${sub}</small>` : ""}</span></button>`;
+  return `<div class="veil" id="veil"></div><nav class="drawer"><div class="art"></div>
+    ${item("dDecks", "decks", "Decks", "", true)}${item("dBrowser", "browser", "Card browser")}${item("dStats", "stats", "Statistics")}
+    <hr>${item("dSettings", "settings", "Settings")}${item("dSkins", "skins", "kuma3 Skins", "decks shown, change skin")}${item("dAnki", "anki", "Open kuma3", "import, backups, note types…")}</nav>`;
+}
+function wireDrawer() {
+  const close = () => { drawer = false; render(); };
+  $("veil").onclick = close; $("dDecks").onclick = close;
+  // kuma3's own screens (its Kuma3Screens): Back there comes back here
+  $("dBrowser").onclick = () => { close(); api.screen("browser", sel); };
+  $("dStats").onclick = () => { close(); api.screen("stats"); };
+  $("dSettings").onclick = () => { close(); api.screen("settings"); };
+  $("dAnki").onclick = () => { close(); api.open(); };
+  $("dSkins").onclick = () => { close(); api.settings(); };
+}
+
+// a long press on a deck: AnkiDroid's deck menu
+function sheetHTML() {
+  const d = decks.find(x => x.id === sheet);
+  const item = (id, icon, label) => `<button id="${id}">${svg(icon)}${label}</button>`;
+  return `<div class="veil" id="veil"></div><div class="sheet"><h3>${esc(d?.name.split("::").at(-1) ?? "")}</h3>
+    ${item("sStudy", "study", "Study")}${item("sBrowse", "browser", "Browse")}${item("sAdd", "plus", "Add")}${item("sOptions", "settings", "Deck options")}</div>`;
+}
+function wireSheet() {
+  const id = sheet, close = () => { sheet = null; render(); };
+  $("veil").onclick = close;
+  $("sStudy").onclick = () => { sheet = null; study(); };
+  $("sBrowse").onclick = () => { close(); api.screen("browser", id); };
+  $("sAdd").onclick = () => { close(); api.screen("add", id); };
+  $("sOptions").onclick = () => { close(); api.screen("deck_options", id); };
+}
+
+// ---------------------------------------------------------------- reviewing
+function refresh() {
+  try {
+    st = api.status();
+    if (!st.pkg || !st.anki || !st.media) { view = "setup"; return render(); }
+    if (view === "setup" || view === "error") view = "decks";
+    decks = api.decks().filter(d => !(d.name === "Default" && !left(d)));
+    if (!deck()) sel = decks[0]?.id ?? null;
+    if (view === "review") nextCard(); else render();
+  } catch (e) { view = "error"; render(); }
+}
+function nextCard() { typed = ""; card = sel ? api.next(sel) : null; shown = false; shownAt = Date.now(); render(); }
+function reveal() { if (card) { shown = true; render(); } }
+function study() { if (!sel) return; view = "review"; try { nextCard(); } catch (e) { view = "error"; render(); } }
+// kuma3's Undo: its last change, whichever app made it (the button's title says what)
+function undoLast() {
+  try { if (api.undo()) { decks = api.decks().filter(d => !(d.name === "Default" && !left(d))); nextCard(); } } catch (e) { view = "error"; render(); }
+}
+function leaveDeck() { view = "decks"; card = null; refresh(); }
+function rate(ease) {
+  if (!card || !shown) return;
+  const ms = Math.min(Date.now() - shownAt, 60000);
+  try {
+    api.answer(card, ease, ms);
+    today.n++; today.ms += ms; store("anki-today", today);
+    decks = api.decks().filter(d => !(d.name === "Default" && !left(d)));
+    nextCard();
+  } catch (e) { view = "error"; render(); }
+}
+// Android back: drawer, then the reviewer; false = not used here (the app goes to the skin picker)
+function back() {
+  if (drawer || sheet) { drawer = false; sheet = null; render(); return true; }
+  if (view === "review") { leaveDeck(); return true; }
+  if (view === "search") { view = "decks"; render(); return true; }
+  return false;
+}
+// the gamepad (MainActivity, AnKing layout like the other skins): review X Again, A Hard, Y Good, B Easy (any shows
+// the answer first), right/left scroll the card, L1 replay, R1 back; decks: up/down pick, A or B study
+const FACE = {x: 1, a: 2, y: 3, b: 4};
+function pad(k) {
+  if (drawer || sheet) { if (FACE[k]) { drawer = false; sheet = null; render(); } return; }
+  if (view === "review") {
+    if (k === "r1") return leaveDeck();
+    if (!card) { if (FACE[k]) leaveDeck(); return; }
+    if (FACE[k]) return shown ? rate(FACE[k]) : reveal();
+    if (k === "right" || k === "left") return toCard({t: "scroll", dy: k === "right" ? -240 : 240});
+    if (k === "l1") return toCard({t: "replay"});
+    return;
+  }
+  if (view !== "decks") return;
+  const i = decks.findIndex(d => d.id === sel), step = {up: -1, right: -1, down: 1, left: 1}[k];
+  if (step) { pick(decks[(i + step + decks.length) % decks.length]?.id ?? sel); render(); $("main").querySelector(".deck.sel")?.scrollIntoView({block: "nearest"}); }
+  else if (k === "a" || k === "b") study();
+}
+document.addEventListener("keydown", e => {   // a hardware keyboard: space/enter show the answer, 1-4 answer
+  if (view !== "review" || !card) return;
+  if (!shown && (e.key === " " || e.key === "Enter")) { e.preventDefault(); reveal(); }
+  else if (shown && "1234".includes(e.key)) rate(+e.key);
+});
+
+// ---------------------------------------------------------------- the card (same as the other skins; AnkiDroid's night mode classes)
+function cardDoc(html, skip, head = "") {
+  let first = true;
+  html = html.replace(/\[sound:([^\]]+)\]/g, (m, f) => {
+    const auto = first && !skip.includes(f); if (auto) first = false;
+    const src = esc(encodeURI(f));
+    return /\.(mp4|webm|mkv|mov|m4v)$/i.test(f)
+      ? `<video src="${src}" controls playsinline ${auto ? "autoplay" : ""}></video>`
+      : `<audio src="${src}" controls ${auto ? "autoplay" : ""}></audio>`;
+  });
+  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"><base href="${esc(st.mediaBase)}"><script>(${cardHelper})()<\/script>
+${head}<style>body{background:#303030;color:#fff}</style><style>${card.css || ""}</style><style>html,body{margin:0}body{padding:16px}img,video{max-width:100%;height:auto}</style></head>
+<body class="card card${card.ord + 1} nightMode night_mode">${html}</body></html>`;
+}
+const sounds = html => [...(html || "").matchAll(/\[sound:([^\]]+)\]/g)].map(m => m[1]);
+
+// Type-the-answer cards ({{type:Field}}): kuma3 sends rslib's [[type:Field]]. The question gets a box (Enter = show
+// the answer), the answer what was typed against the field: green when right, else struck out red + the right one.
+const TYPE = /\[\[type:(?:[^\]]*:)?([^\]:]+)\]\]/g;
+let typed = "";
+const typeQ = html => html.replace(TYPE, `<input id="typeans" value="${esc(typed)}" autocomplete="off" autocapitalize="off" spellcheck="false"
+  style="font:inherit;font-size:.7em;width:80%;max-width:20em;flex-basis:auto;text-align:center;color:#000;background:#fff">`);
+function typeA(html) {
+  let n = 0;
+  return html.replace(TYPE, (m, f) => {
+    if (n++) return "";
+    const want = new DOMParser().parseFromString(card.fields?.[f] ?? "", "text/html").body.textContent.trim();
+    const got = typed.trim(), same = got.normalize("NFKC") === want.normalize("NFKC");
+    return same ? `<div style="color:#3c3">${esc(want)} ✓</div>`
+      : `<div><s style="color:#e33">${esc(got || "–")}</s><br><span style="color:#3c3">${esc(want)}</span></div>`;
+  });
+}
+
+
+refresh();
+</script>
+</body>
+</html>

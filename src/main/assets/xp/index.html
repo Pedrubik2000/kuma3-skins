@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Anki XP</title>
+<style>
+/* An XP desktop (sky + hill), one Luna window for reps, taskbar at the bottom. Single look, no dark mode. */
+:root{
+  --sky-top:#2a6fd6; --sky-low:#8cc4f5; --hill:#3f9a2c; --hill-dark:#2c7a1c;
+  --luna-edge:#0831d9; --face:#ece9d8; --list:#fff; --ink:#000; --select:#316ac5;
+  --new:#0000ff; --learn:#c00000; --due:#008000;
+  --ui:Tahoma,Verdana,"DejaVu Sans",Roboto,sans-serif; --title:"Trebuchet MS",Tahoma,Roboto,sans-serif;
+  --fs:12px; color-scheme:light;
+}
+@media (pointer:coarse){:root{--fs:15px}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{overflow:hidden;font:var(--fs) var(--ui);color:var(--ink);background:var(--sky-top);user-select:none;-webkit-tap-highlight-color:transparent}
+.desktop{position:fixed;inset:0;bottom:34px;
+  background:
+    radial-gradient(140% 60% at 30% 108%,var(--hill) 0 48%,transparent 48.3%),
+    radial-gradient(120% 55% at 85% 112%,var(--hill-dark) 0 50%,transparent 50.3%),
+    radial-gradient(80% 25% at 70% 30%,rgba(255,255,255,.55),transparent 70%),
+    radial-gradient(60% 18% at 20% 18%,rgba(255,255,255,.45),transparent 70%),
+    linear-gradient(var(--sky-top),var(--sky-low) 70%)}
+.icon{width:84px;display:grid;justify-items:center;gap:4px;color:#fff;text-shadow:1px 1px 1px #000;text-align:center;padding:4px;border:1px dotted transparent}
+.icon .glyph{width:48px;height:48px;filter:drop-shadow(1px 2px 2px rgba(0,0,0,.5))}
+.desktop{display:flex;flex-flow:column wrap;align-content:flex-start;gap:6px;padding:12px}
+/* Home screen: _ hides the window (the desktop and its pinned apps show), the taskbar button brings it back. */
+body.min .win{display:none}
+body.min .task{background:#3c81f3;box-shadow:none}
+.startmenu.progs{max-height:calc(100% - 50px);overflow-y:auto}
+.ti{width:18px;height:18px;vertical-align:-4px;border-radius:3px}
+
+.win{position:absolute;left:50%;top:calc(50% - 17px);transform:translate(-50%,-50%);width:min(1100px,calc(100% - 32px));height:calc(100% - 64px);
+  display:flex;flex-direction:column;background:var(--face);border:3px solid var(--luna-edge);border-top:0;border-radius:8px 8px 0 0;box-shadow:2px 4px 14px rgba(0,0,0,.45)}
+.titlebar{height:32px;flex:none;display:flex;align-items:center;gap:6px;padding:0 4px 0 8px;border-radius:7px 7px 0 0;color:#fff;font:bold calc(var(--fs) + 1px) var(--title);text-shadow:1px 1px #0f1089;
+  background:linear-gradient(#0997ff,#0053ee 8%,#0050ee 40%,#06f 88%,#06f 93%,#005bff 95%,#003dd7 96%,#003dd7)}
+.titlebar .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb{width:24px;height:24px;border:1px solid #fff;border-radius:3px;display:grid;place-items:center;color:#fff;font:bold 13px var(--ui);
+  background:radial-gradient(circle at 90% 90%,#0054e9,#2263d5 55%,#4479e4 70%,#a3bbec 90%,#fff)}
+.tb.x{background:radial-gradient(circle at 90% 90%,#cc4600,#dc6527 55%,#cd7546 70%,#ffccb2 90%,#fff)}
+.menubar{display:flex;gap:2px;padding:2px 4px;border-bottom:1px solid #d6d2c2;flex:none}
+.menubar span{padding:3px 8px}
+.main{flex:1;display:flex;min-height:0;padding:6px;gap:6px}
+.side{width:200px;flex:none;border-radius:4px;padding:10px 8px;background:linear-gradient(#7ba2e7,#6375d6);display:flex;flex-direction:column;gap:10px;overflow:auto}
+.pane{background:#d6dff7;border-radius:3px;overflow:hidden}
+.pane h3{margin:0;padding:6px 8px;font:bold var(--fs) var(--ui);color:#215dc6;background:linear-gradient(90deg,#fff,#c6d3f7)}
+.pane button{all:unset;display:block;padding:6px 8px;color:#215dc6}
+.pane button:active{text-decoration:underline;color:#428eff}
+.pane p{margin:0;padding:4px 8px 8px;color:#333;line-height:1.5}
+.content{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.sunken{flex:1;min-height:0;overflow:auto;background:var(--list);border:1px solid #7f9db9}
+table{width:100%;border-collapse:collapse}
+th{font-weight:normal;text-align:left;padding:4px 8px;background:linear-gradient(#fff,#ebeadb);border-right:1px solid #d6d2c2;border-bottom:2px solid #d6d2c2;position:sticky;top:0}
+td{padding:8px;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.name{white-space:normal}
+th.n,td.n{text-align:right;width:60px}
+tr.row.sel td{background:var(--select);color:#fff}
+.c-new{color:var(--new)}.c-learn{color:var(--learn)}.c-due{color:var(--due)}
+tr.sel .c-new,tr.sel .c-learn,tr.sel .c-due{color:#fff}
+.zero{color:#999}
+
+.btn{font:var(--fs) var(--ui);min-width:80px;min-height:32px;padding:4px 12px;border:1px solid #003c74;border-radius:3px;color:#000;
+  background:linear-gradient(#fff,#ecebe6 86%,#d6d0c5)}
+.btn:active{background:linear-gradient(#cdcac3,#e3e3db 8%,#f2f2f1)}
+.btn small{display:block;color:#555;font-size:.8em}
+@media (pointer:coarse){.btn{min-height:52px;flex:1;max-width:180px}}
+.row-btns{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;flex:none}
+iframe.face{flex:1;min-height:0;width:100%;border:1px solid #7f9db9;background:#fff}
+.msg{display:grid;place-items:center;align-content:center;text-align:center;gap:12px;padding:24px 16px}
+.msg .q{font-size:1.6em}
+.msg p{margin:0;max-width:46ch;line-height:1.6;color:#333}
+.deckline{color:#555;flex:none}
+.prog{height:16px;flex:none;border:1px solid #686868;border-radius:3px;padding:1px;background:#fff;display:flex;gap:2px;overflow:hidden}
+.prog i{width:8px;flex:none;background:linear-gradient(#acedad,#7be47d 25%,#4cda50 50%,#2ed330 75%,#42d845)}
+.status{display:flex;gap:2px;flex:none}
+.status span{flex:1;padding:2px 6px;border:1px solid #d6d2c2;border-top-color:#a0a0a0;border-left-color:#a0a0a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Game bar: daily goal ring, level + XP bar, combo. Tap it for the quests. */
+.gbar{display:flex;align-items:center;gap:8px;flex:none;padding:3px 6px;border:1px solid #d6d2c2;border-top-color:#a0a0a0;border-left-color:#a0a0a0;font-variant-numeric:tabular-nums}
+.ring{width:22px;height:22px;flex:none;border-radius:50%;background:conic-gradient(#2ed330 calc(var(--p) * 1%),#c9c6b8 0);-webkit-mask:radial-gradient(circle,transparent 52%,#000 54%);mask:radial-gradient(circle,transparent 52%,#000 54%)}
+.ring.over{background:conic-gradient(#ffb300 calc(var(--p) * 1%),#2ed330 0)}
+.xpbar{flex:1;min-width:40px;height:12px;border:1px solid #686868;border-radius:2px;background:#fff;overflow:hidden}
+.xpbar i{display:block;height:100%;background:linear-gradient(#a5c8ff,#3a7ce8 50%,#2563d8)}
+.combo{min-width:8ch;text-align:right}
+.combo.hot{color:#c00000;font-weight:bold}
+.combo.c10{color:#e07000;font-size:1.15em}
+.combo.c25{color:#d00000;font-size:1.3em;text-shadow:0 0 4px #ffb000}
+/* Balatro-style juice: the combo pops and wobbles on each hit (harder when the multiplier steps up), the ×N
+   catches fire from combo 10 (taller with --h), the window shakes and flashes on a step up. */
+.combo .m{display:inline-block}
+.combo .m.j{animation:juice .45s ease-out}
+.combo .m.j.big{animation:juice-big .6s ease-out}
+@keyframes juice{0%{transform:scale(1.35) rotate(-6deg)}30%{transform:scale(.92) rotate(4deg)}55%{transform:scale(1.06) rotate(-2deg)}80%{transform:scale(.99) rotate(1deg)}100%{transform:none}}
+@keyframes juice-big{0%{transform:scale(1.8) rotate(-10deg)}25%{transform:scale(.85) rotate(7deg)}50%{transform:scale(1.12) rotate(-4deg)}75%{transform:scale(.97) rotate(2deg)}100%{transform:none}}
+.combo .fire{position:relative;isolation:isolate;padding:0 2px;color:#fff;text-shadow:0 0 3px #a00000,1px 1px #600}
+.combo .fire::before{content:"";position:absolute;z-index:-1;left:-3px;right:-3px;bottom:-2px;height:calc(100% + 4px + 14px * var(--h));transform-origin:50% 100%;filter:blur(1.5px);
+  background:radial-gradient(40% 45% at 50% 100%,#fff6a0,transparent),radial-gradient(45% 75% at 30% 100%,#ffb000,transparent),radial-gradient(60% 100% at 55% 100%,#ff4000 35%,transparent 72%);
+  animation:flame .17s infinite alternate}
+@keyframes flame{from{transform:scaleY(1) skewX(-5deg);opacity:.85}to{transform:scaleY(1.25) skewX(6deg);opacity:1}}
+.shake{animation:shake calc(.2s + .08s * var(--s)) ease-out}
+@keyframes shake{0%,100%{translate:0 0;rotate:0deg}20%{translate:calc(var(--s) * -2px) calc(var(--s) * 1px);rotate:calc(var(--s) * -.2deg)}40%{translate:calc(var(--s) * 2px) calc(var(--s) * -2px)}60%{translate:calc(var(--s) * -1px) calc(var(--s) * 1px);rotate:calc(var(--s) * .15deg)}80%{translate:calc(var(--s) * .5px) 0}}
+.flash{position:fixed;inset:0;z-index:7;pointer-events:none;background:#fff;animation:flash .25s ease-out forwards}
+@keyframes flash{from{opacity:.35}to{opacity:0}}
+/* Points × Mult: a blue 10 and a red ×m slide in, slam into the total, which counts up and flies to the XP bar. */
+.pxm{position:fixed;left:50%;bottom:130px;transform:translateX(-50%);z-index:8;pointer-events:none;display:flex;gap:6px;align-items:center;font:bold 22px var(--title);white-space:nowrap}
+.pxm .c,.pxm .x{padding:1px 8px;border:2px solid #000;border-radius:4px;color:#fff;text-shadow:1px 1px #000}
+.pxm .c{background:#009dff;animation:inl .2s ease-out}
+.pxm .x{background:#fe5f55;animation:inr .2s ease-out}
+@keyframes inl{from{transform:translateX(-60px);opacity:0}}
+@keyframes inr{from{transform:translateX(60px);opacity:0}}
+.pxm .t{display:inline-block;color:#ffd700;font-size:28px;text-shadow:1px 1px 2px #000;animation:juice-big .5s ease-out}
+.pxm.fly{transition:transform .35s ease-in,opacity .35s ease-in;transform:translate(-50%,-60vh) scale(.5);opacity:0}
+/* The 10 s combo clock: waits (blue) while the word audio plays, then drains; red in the last 3 s. */
+.timer{height:6px;flex:none;background:#c9c6b8;border:1px solid #808080;overflow:hidden}
+.timer i{display:block;height:100%;width:100%;background:#2ed330}
+.timer.wait i{background:#9db3d6}
+.timer.low i{background:#e02020}
+.report{width:auto;max-width:320px;margin:0 auto;border:1px solid #7f9db9}
+.report td{padding:5px 12px;border-bottom:1px solid #eee;text-align:left}
+.report td:last-child{text-align:right;font-weight:bold}
+.chart{position:relative;height:120px;display:flex;align-items:flex-end;gap:2px;padding:0 2px;background:#fff;border:1px solid #7f9db9}
+.chart i{flex:1;min-height:1px;background:#6f97d8}
+.chart i.hit{background:#2ed330}
+.chart i.today{outline:1px solid #000}
+.chart b{position:absolute;left:0;right:0;border-top:1px dashed #c00000}
+.chart-x{display:flex;justify-content:space-between;color:#555;font-size:.85em}
+.boss{flex:none;padding:4px 8px;color:#fff;font-weight:bold;text-align:center;text-shadow:1px 1px #000;background:linear-gradient(90deg,#8b0000,#d4a017,#8b0000);border:1px solid #000}
+.trophies{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px;max-height:60vh;overflow:auto}
+.tro{border:1px solid #7f9db9;background:#fff;padding:6px;text-align:center;font-size:.85em;line-height:1.3}
+.tro .i{font-size:1.8em}
+.tro.off{opacity:.45;filter:grayscale(1)}
+.opt{display:flex;gap:8px;align-items:center}
+.hint{margin:0;color:#555;font-size:.9em;line-height:1.4}
+.pop.brk{color:#ff3030;font-size:26px;white-space:nowrap}
+.quest{display:flex;gap:8px;align-items:center}
+.quest.ok{color:#008000}
+.pop{position:fixed;left:50%;bottom:130px;transform:translateX(-50%);z-index:8;pointer-events:none;font:bold 20px var(--title);color:#ffd700;text-shadow:1px 1px 2px #000;animation:pop .9s ease-out forwards}
+@keyframes pop{to{transform:translate(-50%,-50px);opacity:0}}
+
+.veil{position:fixed;inset:0;display:grid;place-items:center;z-index:5}
+.dlg{width:min(380px,calc(100% - 32px));background:var(--face);border:3px solid var(--luna-edge);border-top:0;border-radius:8px 8px 0 0;box-shadow:2px 4px 14px rgba(0,0,0,.5)}
+.dlg .body{padding:14px;display:grid;gap:10px}
+
+.taskbar{position:fixed;left:0;right:0;bottom:0;height:34px;display:flex;align-items:stretch;z-index:4;
+  background:linear-gradient(#1f2f86,#3165c4 3%,#3682e5 6%,#4490e6 10%,#3883e5 12%,#2b71e0 15%,#2663da 18%,#235bd6 20%,#2258d5 23%,#2157d6 38%,#245ddb 54%,#2562df 86%,#245fdc 89%,#2158d4 92%,#1d4ec0 95%,#1941a5 98%)}
+.start{all:unset;padding:0 22px 0 12px;display:flex;align-items:center;gap:6px;color:#fff;font:italic bold 19px var(--title);text-shadow:1px 1px 2px #222;border-radius:0 10px 10px 0;
+  background:radial-gradient(circle at 20% 10%,#7cd15f,#3c9b2f 45%,#2a7a1f)}
+.flag{width:16px;height:16px;display:grid;grid-template-columns:1fr 1fr;gap:1px;transform:skewY(-6deg)}
+.flag i:nth-child(1){background:#f35325}.flag i:nth-child(2){background:#81bc06}.flag i:nth-child(3){background:#05a6f0}.flag i:nth-child(4){background:#ffba08}
+.tasks{flex:1;display:flex;gap:4px;padding:4px 6px;min-width:0}
+.task{all:unset;max-width:180px;flex:1;min-width:0;padding:0 8px;border-radius:3px;color:#fff;background:#1e52b7;box-shadow:inset 1px 1px 2px #0c2f7a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:26px}
+.tray{display:flex;align-items:center;gap:10px;padding:0 10px;color:#fff;border-left:1px solid #092e8c;background:linear-gradient(#0c59b9,#139ee9 6%,#18b5f2 10%,#139beb 14%,#1290e8 19%,#0d8dea 63%,#0d9ff1 81%,#0f9eed 88%,#119be9 91%,#1392e2 94%,#137ed7 97%,#095bc9);font-variant-numeric:tabular-nums}
+.tray button{all:unset;font-size:15px}
+.tray .crtbtn{font:bold 10px var(--ui);padding:2px 5px;border:1px solid rgba(255,255,255,.7);border-radius:2px}
+.volpop{position:fixed;right:70px;bottom:40px;z-index:7;background:var(--face);border:1px solid #000;padding:10px 14px;display:grid;justify-items:center;gap:8px;box-shadow:2px 2px 6px rgba(0,0,0,.4)}
+.volveil{position:fixed;inset:0;z-index:6}
+.vtrack{position:relative;width:40px;height:160px;touch-action:none}
+.vtrack::before{content:"";position:absolute;left:17px;top:0;bottom:0;width:4px;background:#fff;border:1px solid #808080;border-right-color:#fff;border-bottom-color:#fff}
+.vfill{position:absolute;left:18px;bottom:0;width:4px;background:var(--select)}
+.vthumb{position:absolute;left:6px;width:28px;height:14px;border:1px solid #003c74;border-radius:3px;background:linear-gradient(#fff,#ecebe6 86%,#d6d0c5)}
+.volpop label{display:flex;gap:4px;align-items:center}
+.balloon{position:fixed;right:10px;bottom:44px;width:min(260px,calc(100% - 32px));background:#ffffe1;border:1px solid #000;border-radius:8px;padding:8px 10px;box-shadow:2px 2px 6px rgba(0,0,0,.4);z-index:6}
+.balloon b{display:block;margin-bottom:3px}
+.startmenu{position:fixed;left:0;bottom:34px;width:min(280px,calc(100% - 32px));z-index:7;border:2px solid #0831d9;border-radius:8px 8px 0 0;overflow:hidden;box-shadow:2px 2px 8px rgba(0,0,0,.5);background:#fff}
+.startmenu header{padding:10px;color:#fff;font:bold 15px var(--title);text-shadow:1px 1px #0f1089;background:linear-gradient(#1868ce,#0e60cb 12%,#0e60cb 20%,#1164cf 32%,#1667cf 33%,#1b6cd3 47%,#1e70d9 54%,#2476dc 60%,#297ae0 65%,#3482e3 77%,#3786e5 79%,#428ee9 90%,#4791eb)}
+.startmenu button{all:unset;display:block;width:100%;box-sizing:border-box;padding:10px 14px;border-bottom:1px solid #eee}
+.startmenu button:active{background:var(--select);color:#fff}
+
+/* CRT shader: an overlay, never blurs text. */
+.crt{position:fixed;inset:0;pointer-events:none;z-index:20}
+.crt::before{content:"";position:absolute;inset:0;
+  background:
+    repeating-linear-gradient(rgba(0,0,0,.13) 0 1px,transparent 1px 3px),
+    repeating-linear-gradient(90deg,rgba(255,0,0,.035) 0 1px,rgba(0,255,0,.025) 1px 2px,rgba(0,0,255,.035) 2px 3px),
+    radial-gradient(ellipse at center,transparent 58%,rgba(0,0,0,.38) 100%)}
+.crt::after{content:"";position:absolute;inset:-50%;opacity:.07;mix-blend-mode:overlay;animation:grain .5s steps(4) infinite;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.crt .roll{position:absolute;left:0;right:0;height:120px;background:linear-gradient(transparent,rgba(255,255,255,.05),transparent);animation:roll 7s linear infinite}
+@keyframes grain{0%{transform:translate(0,0)}25%{transform:translate(-3%,2%)}50%{transform:translate(2%,-3%)}75%{transform:translate(-2%,-1%)}}
+@keyframes roll{from{top:-120px}to{top:100%}}
+body.crt-on .win,body.crt-on .dlg{filter:saturate(1.12) contrast(1.04)}
+body.crt-on .titlebar,body.crt-on .start{text-shadow:1px 0 rgba(255,60,60,.45),-1px 0 rgba(60,160,255,.45),1px 1px #0f1089}
+body:not(.crt-on) .crt{display:none}
+body:not(.crt-on) .crtbtn{opacity:.6}
+
+@media (max-width:700px){
+  .side,.menubar{display:none}
+  .win{top:0;left:0;transform:none;width:100%;height:calc(100% - 34px);border-radius:0;border-width:0}
+  .titlebar{border-radius:0}
+  .start{padding:0 14px 0 10px}
+}
+@media (prefers-reduced-motion:reduce){.crt::after,.crt .roll,.shake,.combo .m,.combo .fire::before{animation:none}}
+</style>
+</head>
+<body class="crt-on">
+
+<div class="desktop" id="desk"></div>
+
+<div class="win" id="win">
+  <div class="titlebar"><img class="ti" src="icon.png" alt=""><span class="t" id="wtitle">Anki XP</span>
+    <span class="tb" id="bMin">_</span><span class="tb">□</span><span class="tb x" id="bClose">✕</span></div>
+  <div class="menubar"><span>File</span><span>Edit</span><span>View</span><span>Tools</span><span>Help</span></div>
+  <div class="main">
+    <aside class="side">
+      <div class="pane"><h3>Study Tasks</h3>
+        <button id="tStudy">Study selected deck</button>
+        <button id="tDecks">Back to deck list</button>
+        <button id="tSync">Sync with AnkiWeb</button>
+        <button id="tOpen">Open kuma3</button></div>
+      <div class="pane"><h3>Daily Quests</h3><p id="questsPane"></p></div>
+      <div class="pane"><h3>Details</h3><p id="details"></p></div>
+    </aside>
+    <section class="content" id="content"></section>
+  </div>
+</div>
+
+<div class="taskbar">
+  <button class="start" id="start"><span class="flag"><i></i><i></i><i></i><i></i></span>start</button>
+  <div class="tasks"><span class="task" id="task"><img class="ti" src="icon.png" alt=""> Anki XP</span></div>
+  <div class="tray"><button class="crtbtn" id="crtBtn">CRT</button><button id="traySync">🔄</button><button id="music" title="Music: tap to play or pause, hold for volume">🔇</button><span id="clock"></span></div>
+</div>
+
+<div id="layer"></div>
+<div class="crt" aria-hidden="true"><div class="roll"></div></div>
+
+<script src="../shared.js"></script>
+<script>
+// ---------------------------------------------------------------- data: kuma3 through the app's bridge, or examples in a browser
+const mock = (() => {
+  const decks = [
+    {id:"1",name:"🐻 German",new:5,learn:2,due:31,cards:[
+      ["Ich hab keine Ahnung.","I have no idea.<br><i>Ahnung = idea, clue</i>"],
+      ["Kannst du mir kurz helfen?","Can you help me for a second?<br><i>kurz = briefly</i>"],
+      ['<div id="raw-word" style="display:none">Fall[der, die Fälle]</div>Ja, auf jeden Fall.',"Yes, definitely.",7]]},
+    {id:"2",name:"🐻 English",new:3,learn:0,due:12,cards:[["thought","/θɔːt/ · I thought you were asleep."]]},
+    {id:"3",name:"🐻 Japanese",new:5,learn:1,due:8,cards:[["食べる","たべる · to eat"]]}];
+  let n = 0;
+  return {
+    status: () => ({pkg:"example", anki:true, media:true, mediaBase:""}),
+    decks: () => decks.map(({cards, ...d}) => d),
+    next(id) {
+      const d = decks.find(x => x.id === id);
+      if (!d || !(d.new + d.learn + d.due)) return null;
+      const [q, a, lapses = 0] = d.cards[n++ % d.cards.length];
+      return {nid:String(n), ord:0, css:".card{font:24px sans-serif;text-align:center;margin-top:24px}",
+        q, a: q + "<hr>" + a, times:["<10m","1d","3d","8d"], model:"🐻 German", lapses, flag:0};
+    },
+    bury() { mock.answer(null, 3); }, improved() {}, progressRead: () => ({}), progressWrite() {}, vibrate() {}, boss: () => null, openKumapie() { balloon("kumapie", "In the app this opens kumapie."); },
+    answer(card, ease) {
+      const d = decks.find(x => x.id === sel), k = d.new ? "new" : d.learn ? "learn" : "due";
+      d[k]--; if (ease === 1) d.learn++;
+    },
+    sync() { balloon("kuma3 sync", "In the app this asks kuma3 to sync with AnkiWeb."); },
+    open() {}, grantAnki() {}, grantMedia() {}
+  };
+})();
+const api = B ? {
+  status: () => JSON.parse(B.status()),
+  decks: () => JSON.parse(B.decks()),
+  next: id => JSON.parse(B.next(id)),
+  answer: (c, ease, ms) => B.answer(c.nid, c.ord, ease, ms),
+  bury: c => B.bury(c.nid, c.ord), openKumapie: c => B.openKumapie(c.nid), vibrate: p => B.vibrate(p), boss: id => JSON.parse(B.boss(id)),
+  progressRead: () => JSON.parse(B.progressRead()), progressWrite: (d, t) => B.progressWrite(d, t), improved: c => B.improved(c.nid, c.ord, c.tags),
+  sync: () => B.sync(), open: () => B.openAnki(),
+  grantAnki: () => B.grantAnki(), grantMedia: () => B.grantMedia()
+} : mock;
+
+// ---------------------------------------------------------------- state
+let st = {}, decks = [], sel = null, view = "decks", card = null, shown = false, shownAt = 0, done = 0;
+try { sel = localStorage.getItem("deck"); } catch (e) {}
+const $ = id => document.getElementById(id), C = $("content");
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
+const deck = () => decks.find(d => d.id === sel);
+// Failed LEECH+ times since the last improvement: improve it first (kumapie and /improve-card flag improved cards
+// orange = 2). Anki's own lapse count can't be changed here, so improving saves it as the note tag xp::lapses::N
+// (failures count from there, on every device) and clears the flag, so the next improvement shows again.
+const LEECH = 6;
+const BASE = /(?:^|\s)xp::lapses::(\d+)(?=\s|$)/;
+const fails = c => (c.lapses ?? 0) - +(BASE.exec(c.tags || "")?.[1] ?? 0);
+const leech = c => c?.model === "🐻 German" && fails(c) >= LEECH;
+const blocked = c => leech(c) && c.flag !== 2;
+function checkImproved(c) {
+  if (!leech(c) || c.flag !== 2) return;
+  c.tags = `${(c.tags || "").replace(BASE, " ").trim()} xp::lapses::${c.lapses}`.trim(); c.flag = 0;
+  api.improved(c);
+  balloon("Card improved", "Its failures start again from 0.");
+}
+const left = d => d ? d.new + d.learn + d.due : 0;
+
+function refresh() {
+  try {
+    st = api.status();
+    if (!st.pkg || !st.anki || !st.media) { view = "setup"; return render(); }
+    if (view === "setup") view = "decks";
+    decks = api.decks().filter(d => !(d.name === "Default" && !left(d)));
+    if (!deck()) sel = decks[0]?.id ?? null;
+    syncGame();
+    paused = false;
+    if (view === "review") nextCard(); else render();
+    playMusic();
+  } catch (e) { failed(); }
+}
+function failed() {   // kuma3 didn't answer: an XP error box with a way out
+  $("wtitle").textContent = "Anki XP - Error";
+  C.innerHTML = `<div class="sunken msg"><div class="q">⚠ kuma3 isn't answering</div>
+    <p>Anki XP couldn't reach your kuma3 collection. Open kuma3 once, then try again.</p>
+    <div class="row-btns"><button class="btn" id="again">Try again</button><button class="btn" id="op">Open kuma3</button></div></div>`;
+  $("again").onclick = refresh; $("op").onclick = () => api.open();
+}
+
+// ---------------------------------------------------------------- views
+function render() {
+  newDay();
+  $("details").innerHTML = `Collection: ${esc(st.pkg === "io.github.pedrubik2000.kuma3" ? "kuma3" : st.pkg || "none")}<br>Reviewed here today: ${g.reps}<br>Best combo today: ${g.best}`;
+  $("questsPane").innerHTML = questList();
+  if (view === "setup") return setupView();
+  if (view === "decks") return decksView();
+  reviewView();
+}
+
+function setupView() {
+  $("wtitle").textContent = "Anki XP - Setup";
+  const step = !st.pkg ? `<p>Install kuma3 Anki first. Anki XP reviews kuma3's cards.</p>`
+    : !st.anki ? `<p>Anki XP needs permission to read and answer your kuma3 cards.</p><button class="btn" id="g">Allow kuma3 access</button>`
+    : `<p>Allow access to all files so cards can show their pictures, audio and video from kuma3's media folder.</p><button class="btn" id="g">Open the setting</button>`;
+  C.innerHTML = `<div class="sunken msg"><div class="q">Welcome to Anki XP</div>${step}</div>`;
+  $("g") && ($("g").onclick = () => st.anki ? api.grantMedia() : api.grantAnki());
+}
+
+function decksView() {
+  $("wtitle").textContent = "Anki XP - Decks";
+  const num = (n, cls) => `<td class="n ${n ? cls : "zero"}">${n}</td>`;
+  C.innerHTML = `<div class="sunken"><table><thead><tr><th>Deck</th><th class="n">New</th><th class="n">Learn</th><th class="n">Due</th></tr></thead><tbody>${
+    decks.map(d => {
+      const parts = d.name.split("::");
+      return `<tr class="row${d.id === sel ? " sel" : ""}" data-id="${d.id}"><td class="name" style="padding-left:${8 + 18 * (parts.length - 1)}px">${esc(parts.at(-1))}</td>${num(d.new, "c-new")}${num(d.learn, "c-learn")}${num(d.due, "c-due")}</tr>`;
+    }).join("")
+  }</tbody></table></div>
+  ${gameBar()}
+  <div class="row-btns"><button class="btn" id="go">Study Now</button><button class="btn" id="sy">Sync</button></div>
+  <div class="status"><span>${decks.length} decks</span><span>${esc(deck()?.name ?? "")}: ${left(deck())} waiting</span></div>`;
+  $("gbar").onclick = questsBox;
+  C.querySelectorAll("tr.row").forEach(r => r.onclick = () => {
+    if (sel === r.dataset.id) return study();   // tap a selected deck again to study it
+    sel = r.dataset.id; try { localStorage.setItem("deck", sel); } catch (e) {}
+    render();
+  });
+  $("go").onclick = study; $("sy").onclick = sync;
+}
+
+function cardDoc(html, skip, head = "") {
+  let first = true;
+  html = html.replace(/\[sound:([^\]]+)\]/g, (m, f) => {
+    const auto = first && !skip.includes(f); if (auto) first = false;
+    const src = esc(encodeURI(f));
+    return /\.(mp4|webm|mkv|mov|m4v)$/i.test(f)
+      ? `<video src="${src}" controls playsinline ${auto ? "autoplay" : ""}></video>`
+      : `<audio src="${src}" controls ${auto ? "autoplay" : ""}></audio>`;
+  });
+  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"><base href="${esc(st.mediaBase)}"><script>(${cardHelper})()<\/script>
+${head}<style>${card.css || ""}</style><style>html,body{margin:0}body{padding:16px}img,video{max-width:100%;height:auto}</style></head>
+<body class="card card${card.ord + 1}">${html}</body></html>`;
+}
+const sounds = html => [...(html || "").matchAll(/\[sound:([^\]]+)\]/g)].map(m => m[1]);
+
+// Type-the-answer cards ({{type:Field}}): kuma3 sends rslib's [[type:Field]]. The question gets a box (Enter = show
+// the answer), the answer what was typed against the field: green when right, else struck out red + the right one.
+const TYPE = /\[\[type:(?:[^\]]*:)?([^\]:]+)\]\]/g;
+let typed = "";
+const typeQ = html => html.replace(TYPE, `<input id="typeans" value="${esc(typed)}" autocomplete="off" autocapitalize="off" spellcheck="false"
+  style="font:inherit;font-size:.7em;width:80%;max-width:20em;flex-basis:auto;text-align:center;color:#000;background:#fff">`);
+function typeA(html) {
+  let n = 0;
+  return html.replace(TYPE, (m, f) => {
+    if (n++) return "";
+    const want = new DOMParser().parseFromString(card.fields?.[f] ?? "", "text/html").body.textContent.trim();
+    const got = typed.trim(), same = got.normalize("NFKC") === want.normalize("NFKC");
+    return same ? `<div style="color:#3c3">${esc(want)} ✓</div>`
+      : `<div><s style="color:#e33">${esc(got || "–")}</s><br><span style="color:#3c3">${esc(want)}</span></div>`;
+  });
+}
+
+function reviewView() {
+  const d = deck();
+  $("wtitle").textContent = `Anki XP - ${(d?.name ?? "").split("::").at(-1)}`;
+  if (!card) {
+    C.innerHTML = `${sess?.reps ? summary(d) : `<div class="sunken msg"><div class="q">Congratulations!</div><p>You have finished this deck for now.</p></div>`}
+    <div class="row-btns"><button class="btn" id="bk">Decks</button><button class="btn" id="sy">Sync</button></div>`;
+    $("bk").onclick = leaveDeck; $("sy").onclick = sync;
+    return;
+  }
+  if (blocked(card)) {
+    const word = (/id="raw-word"[^>]*>([^<]*)/.exec(card.q)?.[1] ?? "this word").split("[")[0].trim();
+    C.innerHTML = `<div class="sunken msg"><div class="q">🩹 Improve this card first</div>
+      <p>You've failed <b>${esc(word)}</b> ${fails(card)} times. Give it a better scene or definition in kumapie
+      (Cards that don't stick, it's at the top), then come back here.</p>
+      <div class="row-btns"><button class="btn" id="imp">Open kumapie</button><button class="btn" id="skip">Skip for today</button></div></div>
+      <div class="status"><span>${esc(d.name)}</span></div>`;
+    $("imp").onclick = () => api.openKumapie(card);
+    $("skip").onclick = () => { try { api.bury(card); decks = api.decks().filter(d => !(d.name === "Default" && !left(d))); nextCard(); } catch (e) { failed(); } };
+    return;
+  }
+  const blocks = Math.max(1, Math.round(30 * done / (done + left(d) || 1)));
+  C.innerHTML = `${isBoss(card) ? `<div class="boss">👑 BOSS CARD · failed ${card.lapses}× · ×3 XP if you get it right</div>` : ""}<div class="deckline"><span class="c-new">${d.new}</span> + <span class="c-learn">${d.learn}</span> + <span class="c-due">${d.due}</span></div>
+  <iframe class="face" id="face"></iframe>
+  ${shown ? "" : `<div class="timer wait" id="timer"><i></i></div>`}
+  <div class="row-btns">${shown
+    ? ["Again","Hard","Good","Easy"].map((b, k) => `<button class="btn" data-r="${k + 1}"><small>${esc(card.times[k] ?? "")}</small>${b}</button>`).join("")
+    : `<button class="btn" id="show" style="min-width:180px">Show Answer</button>`}</div>
+  ${gameBar()}
+  <div class="prog">${"<i></i>".repeat(blocks)}</div>
+  <div class="status"><span>${done} reviewed here</span><span>${esc(d.name)}</span></div>`;
+  showCard($("face"), shown ? cardDoc(typeA(card.a), sounds(card.q)) : cardDoc(typeQ(card.q), [], wordHook()));
+  drawTimer();
+  ducked = false; setVol();
+  $("gbar").onclick = questsBox;
+  if (shown) C.querySelectorAll("[data-r]").forEach(b => b.onclick = () => rate(+b.dataset.r));
+  else $("show").onclick = reveal;
+}
+
+// The deck's done: a report window for this session (since Study was pressed).
+function summary(d) {
+  if (!sess.cheered) {
+    sess.cheered = true; chime([523, 659, 784, 1047, 784, 1047], "square");
+    if (sess.reps >= 20 && !sess.again) { checkAch(["perfect"]); saveGame(); }
+  }
+  const mins = Math.max(1, Math.round((Date.now() - sess.start) / 60000));
+  const rows = [
+    ["Reps", sess.reps],
+    ["XP earned", `+${g.xp - sess.xp0}`],
+    ["Best combo", sess.best + (sess.best && sess.best >= g.record ? " (record!)" : "")],
+    ["Correct", `${Math.round(100 * (sess.reps - sess.again) / sess.reps)}%`],
+    ["Average answer", sess.thinkN ? `${(sess.think / sess.thinkN / 1000).toFixed(1)} s` : "-"],
+    ["Time", `${mins} min`],
+    ["Streak", streak() ? `🔥 ${streak()} day${streak() > 1 ? "s" : ""}` : `goal ${g.reps}/${g.goal} today`],
+    ["Level", `${level(g.xp) + 1}`]];
+  return `<div class="sunken msg"><div class="q">✔ ${esc((d?.name ?? "").split("::").at(-1))} finished</div>
+    <table class="report">${rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(String(v))}</td></tr>`).join("")}</table></div>`;
+}
+
+// ---------------------------------------------------------------- actions
+function nextCard() {
+  typed = ""; card = sel ? api.next(sel) : null; shown = false; shownAt = Date.now();
+  checkImproved(card);
+  resetTimer();
+  render();
+}
+function reveal() { shown = true; thinkMs = clock.on ? clock.ms : 0; render(); }
+function study() {
+  if (!sel) return;
+  view = "review";
+  sess = {reps: 0, again: 0, best: 0, xp0: g.xp, think: 0, thinkN: 0, start: Date.now(), cheered: false};
+  pickBoss();
+  try { nextCard(); } catch (e) { failed(); }
+}
+function leaveDeck() { if (view === "review") breakCombo(); view = "decks"; sess = null; render(); }
+function rate(ease) {
+  if (!card) return;
+  try {
+    api.answer(card, ease, Math.min(Date.now() - shownAt, 60000));
+    done++; score(ease);
+    decks = api.decks().filter(d => !(d.name === "Default" && !left(d)));
+    nextCard();
+  } catch (e) { failed(); }
+}
+function sync() { closeStart(); api.sync(); }
+// ---------------------------------------------------------------- controller (8BitDo Micro held upright, the AnKing layout,
+// same as Anki Hunger): MainActivity sends pad(key) with the controller's own button names.
+// Review: X Again, A Hard, Y Good, B Easy (on the question any of them shows the answer); D-pad right/left = scroll
+// the card up/down, up/down do nothing; L1 = word audio, then sentence audio, then the clip; R1 = back to the decks.
+// Decks: D-pad picks the deck (right/up = up, left/down = down), A or B = study it (or the next deck with cards),
+// X = the previous deck with cards, Y = study the highlighted deck. An open window: any face button closes it.
+const FACE = {x: 1, a: 2, y: 3, b: 4};
+function pad(k) {
+  if (document.body.classList.contains("min")) { if (FACE[k]) minimize(false); return; }
+  if ($("layer").innerHTML) { if (FACE[k]) closeStart(); return; }
+  if (view === "decks") {
+    const n = decks.length, i = decks.findIndex(d => d.id === sel), step = {up: -1, right: -1, down: 1, left: 1}[k];
+    const pick = id => { sel = id; try { localStorage.setItem("deck", sel); } catch (e) {} };
+    const due = dir => { for (let j = 1; j <= n; j++) { const d = decks[(i + dir * j + n * j) % n]; if (left(d)) return d.id; } };
+    if (step) { pick(decks[(i + step + n) % n]?.id ?? sel); render(); C.querySelector("tr.sel")?.scrollIntoView({block: "nearest"}); }
+    else if (k === "a" || k === "b") { if (!left(deck()) && due(1)) pick(due(1)); study(); }
+    else if (k === "x" && due(-1)) { pick(due(-1)); study(); }
+    else if (k === "y") study();
+    return;
+  }
+  if (view !== "review") return;
+  if (k === "r1") return leaveDeck();
+  if (!card) { if (FACE[k]) leaveDeck(); return; }
+  if (blocked(card)) return;   // "Improve this card first": its buttons are for touch
+  if (FACE[k]) return shown ? rate(FACE[k]) : reveal();
+  if (k === "right" || k === "left") return toCard({t: "scroll", dy: k === "right" ? -240 : 240});
+  if (k === "l1") return toCard({t: "replay"});
+}
+
+function back() {   // Android back button: answers true when the page handled it
+  if ($("layer").innerHTML) { $("layer").innerHTML = ""; return true; }
+  if (view === "review") { leaveDeck(); return true; }
+  return false;
+}
+function balloon(title, msg) {
+  const b = document.createElement("div"); b.className = "balloon"; b.innerHTML = `<b>${esc(title)}</b>${esc(msg)}`;
+  b.style.bottom = 44 + 64 * document.querySelectorAll(".balloon").length + "px";   // several at once stack up
+  document.body.append(b); setTimeout(() => b.remove(), 3500);
+}
+function closeStart() { $("layer").innerHTML = ""; }
+$("start").onclick = () => {
+  if ($("layer").innerHTML) return closeStart();
+  $("layer").innerHTML = `<div class="startmenu"><header>🐻 Pedro</header>
+    <button data-a="programs">All Programs ▸</button><button data-a="decks">Decks</button><button data-a="quests">Daily quests</button><button data-a="stats">Statistics</button><button data-a="trophies">Trophies</button><button data-a="settings">Settings</button><button data-a="sync">Sync with AnkiWeb</button>
+    <button data-a="open">Open kuma3</button><button data-a="crt">Retro screen on/off</button></div>`;
+  $("layer").querySelectorAll("[data-a]").forEach(b => b.onclick = () => {
+    closeStart();
+    ({programs, decks: () => { minimize(false); if (st.anki && st.media) leaveDeck(); else render(); }, quests: questsBox, stats: statsBox, trophies: trophiesBox, settings: settingsBox, sync, open: api.open, crt: toggleCrt})[b.dataset.a]();
+  });
+};
+$("tStudy").onclick = study; $("tDecks").onclick = () => { if (view === "review") leaveDeck(); };
+$("tSync").onclick = sync; $("traySync").onclick = sync; $("tOpen").onclick = () => api.open();
+$("bClose").onclick = () => back();
+
+// ---------------------------------------------------------------- home screen: desktop icons, All Programs, minimize
+let pins = []; try { pins = JSON.parse(localStorage.getItem("pins") || "[]"); } catch (e) {}
+function drawDesk() {
+  $("desk").innerHTML = `<div class="icon" id="xpIcon"><img class="glyph" src="icon.png" alt="">Anki XP</div>` +
+    pins.map((a, i) => `<div class="icon" data-i="${i}"><img class="glyph" src="${a.icon}" alt="">${esc(a.label)}</div>`).join("");
+  $("xpIcon").onclick = () => minimize(false);
+  $("desk").querySelectorAll("[data-i]").forEach(el => {
+    const a = pins[+el.dataset.i];
+    el.onclick = () => B?.launch(a.pkg, a.cls);
+    el.oncontextmenu = e => { e.preventDefault(); pin(a); };   // hold an icon to take it off the desktop
+  });
+}
+function pin(a) {
+  const had = pins.some(p => p.cls === a.cls);
+  pins = had ? pins.filter(p => p.cls !== a.cls) : [...pins, a];
+  try { localStorage.setItem("pins", JSON.stringify(pins)); } catch (e) {}
+  drawDesk(); balloon(a.label, had ? "Removed from the desktop." : "Added to the desktop.");
+}
+function minimize(on = !document.body.classList.contains("min")) { document.body.classList.toggle("min", on); }
+function home() { closeStart(); minimize(true); }   // the Home button while Anki XP is in front
+// The icons take ~3 s on the tablet, so the app loads them on its own thread and calls gotApps(): the menu shows the
+// last list at once and redraws when the new one (installed or removed apps) arrives.
+let appList = null;
+function gotApps(list) {
+  appList = list;
+  const open = $("layer").querySelector(".progs");
+  if (open) { const y = open.scrollTop; programs(false); $("layer").querySelector(".progs").scrollTop = y; }
+}
+function programs(load = true) {
+  if (load) B ? B.loadApps() : (appList = []);
+  const apps = appList || [];
+  $("layer").innerHTML = `<div class="startmenu progs"><header>All Programs <small>(hold one to pin it)</small></header>${apps.map((a, i) =>
+    `<button data-p="${i}"><img class="ti" src="${a.icon}" alt=""> ${esc(a.label)}</button>`).join("") || `<button>${B ? "Loading…" : "Only in the app"}</button>`}</div>`;
+  $("layer").querySelectorAll("[data-p]").forEach(b => {
+    const a = apps[+b.dataset.p];
+    b.onclick = () => { closeStart(); B.launch(a.pkg, a.cls); };
+    b.oncontextmenu = e => { e.preventDefault(); pin(a); };
+  });
+}
+drawDesk(); B?.loadApps();
+try { const w = B?.wallpaper(); if (w) $("desk").style.background = `url("${w}") center/cover`; } catch (e) {}   // Pictures/anki-xp on the device
+$("bMin").onclick = () => minimize(true); $("task").onclick = () => minimize();
+
+document.addEventListener("keydown", e => {
+  if (view !== "review" || !card) return;
+  if (e.code === "Space") { e.preventDefault(); shown ? rate(3) : reveal(); }
+  else if (shown && "1234".includes(e.key)) rate(+e.key);
+});
+
+let crt = true; try { crt = localStorage.getItem("crt") !== "off"; } catch (e) {}
+function toggleCrt(on = !crt) { crt = on; document.body.classList.toggle("crt-on", crt); try { localStorage.setItem("crt", crt ? "on" : "off"); } catch (e) {} }
+toggleCrt(crt); $("crtBtn").onclick = () => toggleCrt();
+
+const tick = () => $("clock").textContent = new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+tick(); setInterval(tick, 10000);
+// ---------------------------------------------------------------- background music: the songs in Music/anki-xp on the device
+const bgm = new Audio();
+let tracks = [], track = 0, musicOn = false, vol = 0.5, ducked = false;
+try { musicOn = localStorage.getItem("music") === "on"; vol = +(localStorage.getItem("vol") ?? 0.5); } catch (e) {}
+function saveMusic() {
+  $("music").textContent = musicOn && vol ? "🔊" : "🔇";
+  try { localStorage.setItem("music", musicOn ? "on" : "off"); localStorage.setItem("vol", vol); } catch (e) {}
+}
+function setVol() { bgm.volume = ducked ? vol * 0.2 : vol; }   // 20% while a card plays its own audio or video
+function playMusic() {
+  saveMusic();
+  if (!musicOn) return bgm.pause();
+  if (!tracks.length) {
+    try { tracks = B ? JSON.parse(B.music()) : []; } catch (e) { tracks = []; }
+    if (!tracks.length) {
+      musicOn = false; saveMusic();
+      return balloon("No music", "Put songs in the Music/anki-xp folder on this device, then tap the speaker again.");
+    }
+  }
+  if (!bgm.src) bgm.src = tracks[track % tracks.length];
+  setVol(); bgm.play().catch(() => {});
+}
+bgm.onended = () => { track++; bgm.src = tracks[track % tracks.length]; playMusic(); };
+function away() { bgm.pause(); paused = true; }
+// Tap: play or pause. Hold: the XP volume box.
+$("music").onclick = () => { musicOn = !musicOn; playMusic(); };
+$("music").oncontextmenu = e => { e.preventDefault(); volumeBox(); };   // long-press on a phone, right-click on a PC
+function volumeBox() {
+  $("layer").innerHTML = `<div class="volveil" id="volveil"></div><div class="volpop"><b>Volume</b>
+    <div class="vtrack" id="vtrack"><div class="vfill" id="vfill"></div><div class="vthumb" id="vthumb"></div></div>
+    <label><input type="checkbox" id="mute" ${musicOn ? "" : "checked"}>Mute</label></div>`;
+  $("volveil").onclick = closeStart;   // a tap outside closes it
+  // Our own slider: it holds the finger until it lifts (the built-in one lost it to page scrolling).
+  const track = $("vtrack");
+  const show = () => { $("vfill").style.height = vol * 100 + "%"; $("vthumb").style.bottom = `calc(${vol * 100}% - 7px)`; };
+  const set = e => {
+    const r = track.getBoundingClientRect();
+    vol = Math.round(Math.min(1, Math.max(0, (r.bottom - e.clientY) / r.height)) * 100) / 100;
+    setVol(); saveMusic(); show();
+  };
+  track.onpointerdown = e => { track.setPointerCapture(e.pointerId); set(e); track.onpointermove = set; };
+  track.onpointerup = track.onpointercancel = () => { track.onpointermove = null; };
+  show();
+  $("mute").onchange = e => { musicOn = !e.target.checked; playMusic(); };
+}
+
+// ---------------------------------------------------------------- settings (this device only)
+let prefs = {sound: true, vibrate: true, limit: 10};
+try { Object.assign(prefs, JSON.parse(localStorage.getItem("xp-settings") || "{}")); } catch (e) {}
+const savePrefs = () => { try { localStorage.setItem("xp-settings", JSON.stringify(prefs)); } catch (e) {} };
+const LIMITS = [5, 8, 10, 15, 20];
+function settingsBox() {
+  const ck = (id, on, label) => `<label class="opt"><input type="checkbox" id="${id}" ${on ? "checked" : ""}> ${label}</label>`;
+  $("layer").innerHTML = `<div class="veil" id="oveil"><div class="dlg"><div class="titlebar"><span class="t">Settings</span><span class="tb x" id="ox">✕</span></div>
+    <div class="body">${ck("oSound", prefs.sound, "Game sounds (blips, combo, fanfares)")}${ck("oVib", prefs.vibrate, "Vibration")}${ck("oCrt", crt, "Retro CRT screen")}
+    <label class="opt">Combo time limit <select id="oLim">${LIMITS.map(n => `<option value="${n}" ${n === prefs.limit ? "selected" : ""}>${n} s</option>`).join("")}</select></label>
+    <p class="hint">The clock starts when the word audio ends. Music: tap the speaker in the taskbar, hold it for the volume.</p></div></div></div>`;
+  $("oSound").onchange = e => { prefs.sound = e.target.checked; savePrefs(); blip(3); };
+  $("oVib").onchange = e => { prefs.vibrate = e.target.checked; savePrefs(); buzz(3); };
+  $("oCrt").onchange = e => toggleCrt(e.target.checked);
+  $("oLim").onchange = e => { prefs.limit = +e.target.value; FAST = prefs.limit * 1000; savePrefs(); render(); };
+  $("ox").onclick = closeStart; $("oveil").onclick = e => e.target.id === "oveil" && closeStart();
+}
+
+// ---------------------------------------------------------------- game: XP, combo, daily goal, daily quests
+// Hard/Good/Easy pay the same (10 XP × multiplier), Again 2 XP: the button can't buy XP beyond that.
+// The combo grows on Hard/Good/Easy answered within FAST ms of the word audio ending; Again, the clock
+// running out, or leaving the deck breaks it.
+// Synced through kuma3 (bridge progressRead/progressWrite): each device keeps only its own part, `mine`
+// = {xp, record, goal: [reps, set at ms], days: {day: {reps, fast, best, xp, got, goal}}}, in its progress
+// note; `g` is everyone's parts merged (XP and daily counts added up, best/record the highest, the latest
+// goal), so the phone and the tablet share XP, quests and the streak.
+const QUEST_XP = 100, MILESTONES = [10, 25, 50, 100];
+let FAST = prefs.limit * 1000;   // the combo time limit (Settings)
+let mine = {xp: 0, record: 0, goal: [100, 0], days: {}}, others = {}, g,
+    combo = 0, juice = "", thinkMs = 1e9, recordShown = false, sess = null;
+let device = ""; try { device = localStorage.getItem("xp-device") || ""; } catch (e) {}
+if (!device) {
+  device = `${B ? B.model() : "browser"}-${Math.random().toString(36).slice(2, 8)}`;
+  try { localStorage.setItem("xp-device", device); } catch (e) {}
+}
+function dayKey(back = 0) {   // Anki's day starts at 4 am
+  const t = new Date(Date.now() - 4 * 3600e3 - back * 86400e3);
+  return `${t.getFullYear()}-${t.getMonth() + 1}-${t.getDate()}`;
+}
+try {
+  const saved = localStorage.getItem("xp-mine"), old = JSON.parse(localStorage.getItem("game") || "null");
+  if (saved) mine = JSON.parse(saved);
+  else if (old) {   // the first version kept one device-only object
+    mine = {xp: old.xp || 0, record: old.record || 0, goal: [old.goal || 100, 0], days: {}};
+    if (old.day) mine.days[old.day] = {reps: old.reps || 0, fast: old.fast || 0, best: old.best || 0, xp: 0, got: old.got || [], goal: old.goal || 100};
+  }
+} catch (e) {}
+function merge() {
+  const parts = [mine, ...Object.values(others)], days = {};
+  for (const p of parts) for (const [k, v] of Object.entries(p.days || {})) {
+    const d = days[k] ??= {reps: 0, fast: 0, best: 0, xp: 0, got: [], goal: 0};
+    d.reps += v.reps | 0; d.fast += v.fast | 0; d.xp += v.xp | 0;
+    d.best = Math.max(d.best, v.best | 0); d.goal = Math.max(d.goal, v.goal | 0);
+    for (const q of v.got || []) if (!d.got.includes(q)) d.got.push(q);
+  }
+  const goal = parts.map(p => p.goal || [100, 0]).reduce((x, y) => y[1] > x[1] ? y : x)[0];
+  const day = dayKey(), t = days[day] || {reps: 0, fast: 0, best: 0, got: []};
+  const hit = k => !!days[k] && days[k].reps >= (days[k].goal || goal);   // that day's goal reached
+  const studied = k => (days[k]?.reps || 0) > 0;
+  let streak = 0;   // days in a row with a review here (user), up to today (or yesterday: today still has time); no freezes
+  for (let i = studied(day) ? 0 : 1; studied(dayKey(i)); i++) streak++;
+  const ach = {};   // achievement id -> when it was first unlocked on any device
+  for (const p of parts) for (const [k, v] of Object.entries(p.ach || {})) ach[k] = Math.min(ach[k] ?? Infinity, v);
+  return {ach, bosses: parts.reduce((n, p) => n + (p.bosses | 0), 0), xp: parts.reduce((n, p) => n + (p.xp | 0), 0), record: Math.max(...parts.map(p => p.record | 0)), goal, day,
+    reps: t.reps, fast: t.fast, best: t.best, got: t.got, goalHit: hit(day), streak, days, hit, studied};
+}
+g = merge();
+const today = () => mine.days[dayKey()] ??= {reps: 0, fast: 0, best: 0, xp: 0, got: [], goal: g.goal};
+function saveGame() {
+  g = merge();
+  const text = JSON.stringify(mine);
+  try { localStorage.setItem("xp-mine", text); } catch (e) {}
+  try { api.progressWrite(device, text); } catch (e) {}   // kuma3 not answering: the next save writes it
+}
+function syncGame() {   // the other devices' parts (at start and when coming back to the app)
+  try { const all = api.progressRead(); delete all[device]; others = all; } catch (e) {}
+  saveGame();
+}
+function newDay() { if (g.day !== dayKey()) { g = merge(); combo = 0; } }
+const streak = () => g.streak;
+const level = xp => Math.floor((Math.sqrt(1 + 0.08 * xp) - 1) / 2);   // level L starts at 50·L·(L+1) XP
+const mult = () => Math.min(5, 1 + Math.floor(combo / 5)) * (g.reps >= g.goal ? 1.5 : 1);
+function quests() {   // three a day; sizes change with the date
+  const h = [...g.day].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+  return [
+    {id: "reps", text: `Do ${Math.round(g.goal * [1.2, 1.5, 2][h % 3])} reps`, need: Math.round(g.goal * [1.2, 1.5, 2][h % 3]), have: g.reps},
+    {id: "combo", text: `Reach a ${[15, 20, 25, 30][h % 4]}-rep combo`, need: [15, 20, 25, 30][h % 4], have: g.best},
+    {id: "fast", text: `${Math.round(g.goal * [.4, .5, .6][(h >> 3) % 3])} answers in under ${FAST / 1000} s`, need: Math.round(g.goal * [.4, .5, .6][(h >> 3) % 3]), have: g.fast}];
+}
+function score(ease) {
+  newDay();
+  const fast = thinkMs < FAST, lv = level(g.xp), m0 = mult(), wasHit = g.goalHit, record = g.record, firstToday = !g.reps;
+  if (ease === 1) breakCombo(); else if (!fast) breakCombo(); else combo++;
+  blip(ease); buzz(ease);
+  juice = !combo ? "" : mult() > m0 ? " j big" : " j";
+  const boss = isBoss(card);
+  const xp = ease === 1 ? 2 : Math.round(10 * mult()) * (boss ? 3 : 1);
+  const t = today();
+  t.reps++; t.fast += fast && ease > 1; t.best = Math.max(t.best, combo); t.xp += xp; t.goal = g.goal;
+  mine.xp += xp; mine.record = Math.max(mine.record, combo);
+  g = merge();
+  if (ease === 1) pop(`+${xp} XP`); else pointsMult(mult() * (boss ? 3 : 1), xp);
+  if (sess) {
+    sess.reps++; sess.again += ease === 1; sess.best = Math.max(sess.best, combo);
+    if (thinkMs < 60000) { sess.think += thinkMs; sess.thinkN++; }
+  }
+  if (boss && ease > 1) {
+    bosses[sel].beaten = true; saveBosses(); mine.bosses = (mine.bosses | 0) + 1;
+    win("👑 Boss defeated!", `Triple XP: +${xp}.`, [392, 523, 659, 784, 1047, 1319], "square"); buzz("milestone");
+  } else if (boss) balloon("👑 The boss won this round", "It comes back later today: beat it then for ×3 XP.");
+  if (mult() > m0 && combo) { chime([660, 880]); shake(Math.floor(mult())); }
+  if (MILESTONES.includes(combo)) { win(`${combo} combo!`, `${combo} in a row. Keep going!`, [523, 659, 784, 1047, 1319], "square"); buzz("milestone"); }
+  if (combo > record && !recordShown && record >= 5) { win("New record!", `Best combo ever: ${combo} and counting.`, [784, 1047, 1568], "square"); recordShown = true; }
+  if (firstToday) win(`🔥 ${g.streak}-day streak`, g.streak > 1 ? "Another day in a row. Keep it going!" : "Day 1. Come back tomorrow!", [523, 784, 1047], "square");
+  if (g.goalHit && !wasHit) win("Daily goal done!", "Overtime: every rep now gives 1.5× XP.", [523, 659, 784, 1047]);
+  for (const q of quests()) if (q.have >= q.need && !g.got.includes(q.id)) {
+    t.got.push(q.id); t.xp += QUEST_XP; mine.xp += QUEST_XP; g = merge();
+    win("Quest complete!", `${q.text} · +${QUEST_XP} XP`, [784, 988, 1175]);
+  }
+  if (level(g.xp) > lv) win(`Level ${level(g.xp) + 1}!`, "Keep the combo going.", [523, 784, 1047, 1568]);
+  checkAch();
+  saveGame();
+}
+function gameBar() {
+  newDay();
+  const L = level(g.xp), lo = 50 * L * (L + 1), over = g.reps >= g.goal, j = juice;
+  juice = "";   // one bounce per hit: later redraws (reveal, clock) don't replay it
+  const p = over ? Math.min(100, 100 * (g.reps - g.goal) / g.goal) : 100 * g.reps / g.goal;
+  return `<div class="gbar" id="gbar" title="Tap for today's quests">
+    <span class="ring${over ? " over" : ""}" style="--p:${p}"></span><span>${g.reps}/${g.goal}</span>
+    ${streak() ? `<span title="Days in a row with a review">🔥${streak()}</span>` : ""}<b>Lv ${L + 1}</b><span class="xpbar"><i style="width:${100 * (g.xp - lo) / (100 * (L + 1))}%"></i></span>
+    <span class="combo${combo >= 5 ? " hot" : ""}${combo >= 25 ? " c25" : combo >= 10 ? " c10" : ""}"><span class="m${j}">${combo >= 5 ? `<b${combo >= 10 ? ` class="fire" style="--h:${Math.min(1, (combo - 10) / 40)}"` : ""}>×${mult()}</b> ` : ""}combo ${combo}</span></span></div>`;
+}
+const questList = () => quests().map(q => `<span class="quest${g.got.includes(q.id) ? " ok" : ""}">${g.got.includes(q.id) ? "✔" : "☐"} ${esc(q.text)} (${Math.min(q.have, q.need)}/${q.need})</span>`).join("<br>");
+function questsBox() {
+  newDay();
+  $("layer").innerHTML = `<div class="veil" id="qveil"><div class="dlg"><div class="titlebar"><span class="t">Daily Quests</span><span class="tb x" id="qx">✕</span></div>
+    <div class="body"><div>${questList()}</div><div>Each quest: +${QUEST_XP} XP · ${g.xp} XP total · best combo today ${g.best} · best ever ${g.record}</div>
+    <div class="row-btns"><button class="btn" id="gm">−10</button><span style="align-self:center">Daily goal: <b id="gv">${g.goal}</b> reps</span><button class="btn" id="gp">+10</button></div>
+    <div class="row-btns"><button class="btn" id="gs">Statistics</button></div></div></div></div>`;
+  const goal = d => { mine.goal = [Math.max(10, g.goal + d), Date.now()]; today().goal = mine.goal[0]; saveGame(); $("gv").textContent = g.goal; render(); };
+  $("gm").onclick = () => goal(-10); $("gp").onclick = () => goal(10); $("gs").onclick = statsBox;
+  $("qx").onclick = closeStart; $("qveil").onclick = e => e.target.id === "qveil" && closeStart();
+}
+function breakCombo() {
+  if (combo >= 3) {
+    pop(`COMBO BROKEN ×${combo}`, "brk");
+    slide(440, 110, 0.4); buzz("break");
+  }
+  combo = 0; recordShown = false;
+}
+// Boss card: per deck per day, its due card with the most lapses (kuma3's cards query); ×3 XP when answered
+// right. Chosen once a day on this device (each device may pick its own).
+let bosses = {}; try { bosses = JSON.parse(localStorage.getItem("xp-boss") || "{}"); } catch (e) {}
+const saveBosses = () => { try { localStorage.setItem("xp-boss", JSON.stringify(bosses)); } catch (e) {} };
+function pickBoss() {
+  if (bosses[sel]?.day === dayKey()) return;
+  let c = null; try { c = api.boss(sel); } catch (e) {}
+  bosses[sel] = c ? {day: dayKey(), nid: c.nid, ord: c.ord, beaten: false} : {day: dayKey(), none: true};
+  saveBosses();
+}
+function isBoss(c) {
+  const b = bosses[sel];
+  return !!c && !!b && b.day === dayKey() && !b.none && !b.beaten && b.nid === c.nid && b.ord === c.ord;
+}
+
+// Achievements (synced: mine.ach = {id: unlocked at ms}, merged into g.ach).
+const totalReps = () => Object.values(g.days).reduce((n, d) => n + d.reps, 0);
+const ACH = [
+  {id: "goal", icon: "🎯", name: "Goal getter", desc: "Reach the daily goal", ok: () => g.goalHit},
+  {id: "overtime", icon: "⏱️", name: "Overtime", desc: "Double the daily goal in a day", ok: () => g.reps >= 2 * g.goal},
+  {id: "speed", icon: "🏎️", name: "Speedy", desc: "50 fast answers in a day", ok: () => g.fast >= 50},
+  {id: "combo10", icon: "⚡", name: "On a roll", desc: "A 10-rep combo", ok: () => g.record >= 10},
+  {id: "combo25", icon: "⚡", name: "Unstoppable", desc: "A 25-rep combo", ok: () => g.record >= 25},
+  {id: "combo50", icon: "🌩️", name: "Lightning", desc: "A 50-rep combo", ok: () => g.record >= 50},
+  {id: "combo100", icon: "💯", name: "Hundred in a row", desc: "A 100-rep combo", ok: () => g.record >= 100},
+  {id: "streak7", icon: "🔥", name: "One week", desc: "A 7-day streak", ok: () => g.streak >= 7},
+  {id: "streak30", icon: "🔥", name: "One month", desc: "A 30-day streak", ok: () => g.streak >= 30},
+  {id: "streak100", icon: "🔥", name: "Hundred days", desc: "A 100-day streak", ok: () => g.streak >= 100},
+  {id: "reps1000", icon: "📚", name: "Thousand", desc: "1,000 reps here", ok: () => totalReps() >= 1000},
+  {id: "reps10000", icon: "🏛️", name: "Ten thousand", desc: "10,000 reps here", ok: () => totalReps() >= 10000},
+  {id: "level10", icon: "⭐", name: "Level 10", desc: "Reach level 10", ok: () => level(g.xp) + 1 >= 10},
+  {id: "level25", icon: "🌟", name: "Level 25", desc: "Reach level 25", ok: () => level(g.xp) + 1 >= 25},
+  {id: "perfect", icon: "💎", name: "Flawless", desc: "Finish a deck (20+ reps) without Again", ok: () => false},
+  {id: "boss", icon: "👑", name: "Boss slayer", desc: "Beat a boss card", ok: () => g.bosses >= 1},
+  {id: "boss10", icon: "👑", name: "Boss hunter", desc: "Beat 10 boss cards", ok: () => g.bosses >= 10},
+];
+function checkAch(extra = []) {
+  for (const a of ACH) if (!g.ach[a.id] && (extra.includes(a.id) || a.ok())) {
+    (mine.ach ??= {})[a.id] = Date.now(); g = merge();
+    win(`🏆 ${a.icon} ${a.name}`, a.desc, [659, 784, 988, 1319, 1568], "square"); buzz("milestone");
+  }
+}
+function trophiesBox() {
+  const n = ACH.filter(a => g.ach[a.id]).length;
+  $("layer").innerHTML = `<div class="veil" id="tveil"><div class="dlg"><div class="titlebar"><span class="t">Trophies · ${n} of ${ACH.length}</span><span class="tb x" id="tx">✕</span></div>
+    <div class="body"><div class="trophies">${ACH.map(a => {
+      const at = g.ach[a.id];
+      return `<div class="tro${at ? "" : " off"}"><div class="i">${a.icon}</div><b>${esc(a.name)}</b><br>${esc(a.desc)}${at ? `<br><small>${new Date(at).toLocaleDateString()}</small>` : ""}</div>`;
+    }).join("")}</div></div></div></div>`;
+  $("tx").onclick = closeStart; $("tveil").onclick = e => e.target.id === "tveil" && closeStart();
+}
+
+// Statistics: the last 30 days of reps (green = goal done) and the totals, from everyone's merged parts.
+function statsBox() {
+  newDay();
+  const N = 30, days = [...Array(N)].map((_, i) => dayKey(N - 1 - i));
+  const top = Math.max(g.goal, ...days.map(k => g.days[k]?.reps || 0), 1);
+  const bars = days.map((k, i) => {
+    const r = g.days[k]?.reps || 0;
+    return `<i class="${g.hit(k) ? "hit" : ""}${i === N - 1 ? " today" : ""}" style="height:${100 * r / top}%" title="${k}: ${r} reps"></i>`;
+  }).join("");
+  let longest = 0, run = 0;
+  for (let i = 400; i >= 0; i--) { run = g.studied(dayKey(i)) ? run + 1 : 0; longest = Math.max(longest, run); }
+  const all = Object.values(g.days), L = level(g.xp);
+  const rows = [
+    ["Today", `${g.reps}/${g.goal} reps`], ["Streak", g.streak ? `🔥 ${g.streak} day${g.streak > 1 ? "s" : ""}` : "0"],
+    ["Longest streak", `${longest} day${longest === 1 ? "" : "s"}`], ["Best combo ever", g.record],
+    ["Level", `${L + 1} (${g.xp} XP)`], ["Total reps", all.reduce((n, d) => n + d.reps, 0)],
+    ["Days studied", all.filter(d => d.reps).length], ["Devices", 1 + Object.keys(others).length]];
+  $("layer").innerHTML = `<div class="veil" id="sveil"><div class="dlg"><div class="titlebar"><span class="t">Statistics</span><span class="tb x" id="sx">✕</span></div>
+    <div class="body"><div class="chart"><b style="bottom:${100 * g.goal / top}%"></b>${bars}</div><div class="chart-x"><span>30 days ago</span><span>today</span></div>
+    <table class="report">${rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(String(v))}</td></tr>`).join("")}</table></div></div></div>`;
+  $("sx").onclick = closeStart; $("sveil").onclick = e => e.target.id === "sveil" && closeStart();
+}
+function pop(text, cls = "") {
+  const p = document.createElement("div"); p.className = "pop " + cls; p.textContent = text;
+  document.body.append(p); setTimeout(() => p.remove(), 900);
+}
+function pointsMult(m, xp) {
+  const p = document.createElement("div"); p.className = "pxm";
+  p.innerHTML = `<span class="c">10</span><span class="x">×${+m.toFixed(1)}</span>`;
+  document.body.append(p);
+  setTimeout(() => {
+    p.innerHTML = `<span class="t">+0 XP</span>`;
+    const t = p.firstChild, t0 = performance.now();
+    const tick = now => { const k = Math.min(1, (now - t0) / 300); t.textContent = `+${Math.round(xp * (1 - (1 - k) ** 3))} XP`; if (k < 1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }, 380);
+  setTimeout(() => p.classList.add("fly"), 950);
+  setTimeout(() => p.remove(), 1350);
+}
+function shake(s) {   // window shake + flash, stronger at each multiplier step (s = 1..5)
+  const w = $("win"); w.classList.remove("shake"); void w.offsetWidth;
+  w.style.setProperty("--s", s); w.classList.add("shake");
+  w.onanimationend = e => e.animationName === "shake" && w.classList.remove("shake");
+  const f = document.createElement("div"); f.className = "flash"; document.body.append(f); setTimeout(() => f.remove(), 250);
+}
+function win(title, msg, notes, type) { balloon(title, msg); chime(notes, type); }
+
+// ---------------------------------------------------------------- the combo clock
+// Starts when the front's word audio ends (the card plays it through its own Web Audio player, hooked
+// in wordHook), right away on a card without word audio, or after 5 s if the word audio never reports
+// back. Counts only while the app is in front: deltas over 250 ms (app in the background, throttled)
+// don't count.
+let clock = {tok: 0, on: false, ms: 0, broke: false, last: 0}, paused = false;
+const wordFile = q => /data-audio="word"[\s\S]*?\[audio:\s*([^\]]+?)\s*\]/.exec(q || "")?.[1];
+function resetTimer() {
+  clock = {tok: clock.tok + 1, on: false, ms: 0, broke: false, last: performance.now()};
+  const tok = clock.tok;
+  if (!wordFile(card?.q)) clock.on = true;
+  else setTimeout(() => wordDone(tok), 5000);
+}
+function wordDone(tok) { if (tok === clock.tok && !clock.on) { clock.on = true; clock.last = performance.now(); drawTimer(); } }
+function wordHook() {   // a script for the front's <head>: tells this page when the word audio has played
+  const w = wordFile(card?.q);
+  if (!w) return "";
+  return `<script>(function(){var W=${JSON.stringify(w)},T=${clock.tok},f;
+function done(){parent.postMessage({t:"word",tok:T},"*")}
+Object.defineProperty(window,'__playMobile',{configurable:true,get:function(){return f},set:function(g){f=function(src){
+var r=g.apply(this,arguments),s=String(src);try{s=decodeURIComponent(s)}catch(e){}
+if(s.indexOf(W)>=0&&r&&r.then)r.then(done,done);return r}}})})();<\/script>`;
+}
+function drawTimer() {
+  const t = $("timer"); if (!t) return;
+  const left = Math.max(0, FAST - clock.ms);
+  t.className = "timer" + (!clock.on ? " wait" : left <= 3000 ? " low" : "");
+  t.firstChild.style.width = (clock.on ? 100 * left / FAST : 100) + "%";
+}
+setInterval(() => {
+  const now = performance.now(), dt = now - clock.last; clock.last = now;
+  if (view !== "review" || !card || shown || paused || !clock.on || blocked(card) || dt > 250) return;
+  const before = clock.ms; clock.ms += dt;
+  const left = FAST - clock.ms;
+  if (left > 0 && left <= 3000 && Math.ceil(left / 1000) < Math.ceil((FAST - before) / 1000) && combo >= 3) chime([1200], "sine", 0.2);
+  if (left <= 0 && !clock.broke) {   // only the game bar changes: redrawing the card would restart its audio
+    clock.broke = true; breakCombo();
+    const gb = $("gbar"); if (gb) { gb.outerHTML = gameBar(); $("gbar").onclick = questsBox; }
+  }
+  drawTimer();
+}, 100);
+
+// ---------------------------------------------------------------- sounds (Web Audio, no files)
+let ac;
+function chime(notes, type = "triangle", vol = 0.35) {   // short arpeggio
+  if (!prefs.sound) return;
+  try {
+    ac ??= new AudioContext();
+    notes.forEach((f, i) => {
+      const o = ac.createOscillator(), v = ac.createGain(), t = ac.currentTime + i * 0.09;
+      o.type = type; o.frequency.value = f;
+      v.gain.setValueAtTime(vol, t); v.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+      o.connect(v).connect(ac.destination); o.start(t); o.stop(t + 0.3);
+    });
+  } catch (e) {}
+}
+function slide(from, to, secs) {   // the combo-break "fall"
+  if (!prefs.sound) return;
+  try {
+    ac ??= new AudioContext();
+    const o = ac.createOscillator(), v = ac.createGain(), t = ac.currentTime;
+    o.type = "sawtooth"; o.frequency.setValueAtTime(from, t); o.frequency.exponentialRampToValueAtTime(to, t + secs);
+    v.gain.setValueAtTime(0.35, t); v.gain.exponentialRampToValueAtTime(0.001, t + secs);
+    o.connect(v).connect(ac.destination); o.start(t); o.stop(t + secs);
+  } catch (e) {}
+}
+// 8-bit blips per button: Again a low bonk, Hard one note, Good two up, Easy a quick run.
+const BLIPS = {1: [196, 131], 2: [440], 3: [523, 784], 4: [659, 880, 1319]};
+// Vibration patterns (on, off, on… ms): a tap for each button, heavier for Again; a double knock for a break.
+const BUZZ = {1: "45", 2: "15", 3: "12", 4: "10,40,10", break: "70,60,110", milestone: "25,40,25,40,60"};
+function buzz(kind) { if (prefs.vibrate) try { api.vibrate(BUZZ[kind]); } catch (e) {} }
+function blip(ease) {
+  if (!prefs.sound) return;
+  try {
+    ac ??= new AudioContext();
+    BLIPS[ease].forEach((f, i) => {
+      const o = ac.createOscillator(), v = ac.createGain(), t = ac.currentTime + i * 0.05;
+      o.type = "square"; o.frequency.value = f * 2 ** (Math.min(combo, 12) / 12);   // a semitone up per combo hit, an octave max
+      v.gain.setValueAtTime(0.3, t); v.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+      o.connect(v).connect(ac.destination); o.start(t); o.stop(t + 0.09);
+    });
+  } catch (e) {}
+}
+
+refresh();
+</script>
+</body>
+</html>

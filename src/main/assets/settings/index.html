@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>kuma3 Skins settings</title>
+<style>
+/* kuma3 Skins' own settings, for every skin (AnkiDroid's dark settings look) */
+:root{color-scheme:dark;--bg:#303030;--bar:#3a3a3a;--dim:#9e9e9e;--accent:#64b5f6}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:#fff;font:16px Roboto,system-ui,sans-serif}
+header{position:sticky;top:0;display:flex;align-items:center;gap:16px;min-height:64px;padding:max(8px,env(safe-area-inset-top)) 16px 8px 4px;background:var(--bar)}
+header button{width:48px;height:48px;display:grid;place-items:center;background:none;border:0;color:inherit;border-radius:50%}
+header svg{width:24px;height:24px;fill:currentColor}
+header b{font-size:22px;font-weight:400}
+h2{margin:24px 16px 4px 72px;font-size:14px;font-weight:500;color:var(--accent)}
+p.note{margin:0 16px 8px 72px;color:var(--dim);font-size:14px;line-height:1.4}
+.row{display:flex;align-items:center;gap:16px;min-height:56px;padding:8px 16px 8px 72px;border:0;background:none;color:inherit;font:inherit;width:100%;text-align:left}
+.row small{display:block;color:var(--dim);font-size:14px}
+label.row{cursor:pointer}
+label.row span{flex:1;min-width:0;overflow-wrap:anywhere}
+label.row input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+label.row.off span{color:#777}
+main{padding-bottom:max(24px,env(safe-area-inset-bottom))}
+</style>
+</head>
+<body>
+<header><button id="bk" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button><b>kuma3 Skins</b></header>
+<main>
+  <h2>Skin</h2>
+  <button class="row" id="skin"><span>Change skin<small>Anki, Anki XP, Anki Hunger, Anki Joker</small></span></button>
+  <h2>Decks</h2>
+  <p class="note">Decks shown in every skin, each on its own: hide a parent to keep only the subdecks you want (they show
+    as "Parent › Subdeck"). Studying a parent deck still brings cards from its hidden subdecks: kuma3 schedules the whole tree.</p>
+  <div id="decks"></div>
+</main>
+<script src="../shared.js"></script>
+<script>
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[ch]));
+// a browser (no bridge): example decks
+let decks = B ? JSON.parse(B.allDecks()) : [{id: "1", name: "Deutsch"}, {id: "2", name: "Deutsch::Core 1000"},
+  {id: "3", name: "Japanese", hidden: true}, {id: "4", name: "Japanese::Kaishi"}, {id: "5", name: "kumapie", hidden: true}];
+decks = decks.filter(d => d.name !== "Default");
+function draw() {
+  document.getElementById("decks").innerHTML = decks.map(d => {
+    const depth = d.name.split("::").length - 1;
+    return `<label class="row${d.hidden ? " off" : ""}" style="padding-left:${72 + depth * 24}px">
+      <span>${esc(d.name.split("::").at(-1))}</span>
+      <input type="checkbox" data-id="${d.id}" ${d.hidden ? "" : "checked"}></label>`;
+  }).join("");
+  document.querySelectorAll("#decks input").forEach(i => i.onchange = () => {
+    decks.find(d => d.id === i.dataset.id).hidden = !i.checked;
+    B?.setHiddenDecks(JSON.stringify(decks.filter(d => d.hidden).map(d => d.id)));
+    draw();
+  });
+}
+draw();
+document.getElementById("bk").onclick = () => B ? B.settings(0) : history.back();
+document.getElementById("skin").onclick = () => B ? B.useSkin("") : alert("In the app this opens the skin picker.");
+function back() { return false; }   // the app takes Back here to the skin
+</script>
+</body>
+</html>

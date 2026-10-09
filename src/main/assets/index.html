@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>kuma3 Skins</title>
+<style>
+:root{color-scheme:dark}
+html,body{margin:0;min-height:100%;background:#111;color:#eee;font:16px system-ui,sans-serif}
+main{max-width:560px;margin:0 auto;padding:max(24px,env(safe-area-inset-top)) 16px 24px}
+h1{font-size:24px;margin:8px 0 4px}
+p.sub{margin:0 0 20px;color:#aaa}
+button.skin{display:flex;gap:16px;align-items:center;width:100%;margin:0 0 12px;padding:16px;border:2px solid #333;
+  border-radius:12px;background:#1c1c1c;color:inherit;font:inherit;text-align:left;cursor:pointer}
+button.skin.on,button.skin:focus-visible{border-color:#f0c040;outline:none}
+.icon{flex:none;width:56px;height:56px;border-radius:12px;display:grid;place-items:center;font-size:30px}
+.skin b{display:block;font-size:18px}
+.skin span{color:#aaa;font-size:14px}
+</style>
+</head>
+<body>
+<main>
+  <h1>🐻 kuma3 Skins</h1>
+  <p class="sub">Review your kuma3 cards in another look. Back from a skin brings you here.</p>
+  <div id="list"></div>
+  <button class="skin" id="set"><div class="icon" style="background:#424242">⚙️</div><div><b>Settings</b><span>Decks shown in every skin</span></div></button>
+</main>
+<script src="shared.js"></script>
+<script>
+const SKINS = [
+  {id: "anki", name: "Anki", icon: "⭐", bg: "#1188d8", about: "kuma3 Anki's own look: deck tree, drawer, the four answer buttons"},
+  {id: "xp", name: "Anki XP", icon: "🪟", bg: "#245edb", about: "Windows XP: XP, combos, quests, trophies; can be your home screen"},
+  {id: "hunger", name: "Anki Hunger", icon: "🗡️", bg: "#5a1010", about: "Fear & Hunger fights: arms, legs, head; Again = you get hit"},
+  {id: "joker", name: "Anki Joker", icon: "🃏", bg: "#1d6b45", about: "Balatro runs: blinds, hands and jokers"}];
+let at = 0;
+const list = document.getElementById("list");
+list.innerHTML = SKINS.map((s, i) => `<button class="skin" data-i="${i}"><div class="icon" style="background:${s.bg}">${s.icon}</div>
+  <div><b>${s.name}</b><span>${s.about}</span></div></button>`).join("");
+const buttons = [...list.querySelectorAll("button")];
+const pick = i => B ? B.useSkin(SKINS[i].id) : alert(`In the app this opens ${SKINS[i].name}.`);
+buttons.forEach(b => b.onclick = () => pick(+b.dataset.i));
+document.getElementById("set").onclick = () => B ? B.settings(1) : alert("In the app this opens the settings.");
+function mark() { buttons.forEach((b, i) => b.classList.toggle("on", i === at)); }
+// the gamepad (MainActivity): up/down choose, A opens
+function pad(k) {
+  if (k === "up" || k === "down") { at = (at + (k === "up" ? -1 : 1) + SKINS.length) % SKINS.length; mark(); }
+  if (k === "a") pick(at);
+}
+function back() { return false; }
+</script>
+</body>
+</html>
