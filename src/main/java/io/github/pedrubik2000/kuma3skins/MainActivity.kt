@@ -500,7 +500,7 @@ class MainActivity : Activity() {
             else packageManager.getLaunchIntentForPackage(p)?.let(::startActivity)
         }
 
-        /** stats, browser, add, deck_options, settings, kuma3_settings, note_types; [deckId] "" = none. */
+        /** stats, browser, add, deck_options, settings; [deckId] "" = none. */
         @JavascriptInterface
         fun openScreen(screen: String, deckId: String) = kuma3Screen(screen) { deckId.toLongOrNull()?.let { putExtra("deck_id", it) } }
 
