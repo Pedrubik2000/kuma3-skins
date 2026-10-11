@@ -71,6 +71,8 @@ addEventListener("message", e => {
   else if (m.t === "focus") cardFrame().focus();
   else if (m.t === "typed" && typeof typed !== "undefined") typed = String(m.v);
   else if (m.t === "enter") reveal();
+  // a card that grades itself (multiple choice: right = 3, wrong = 1): show the answer, then rate it like the buttons
+  else if (m.t === "rate" && [1, 2, 3, 4].includes(m.ease)) { reveal(); rate(m.ease); }
   else if (m.t === "media" && typeof setVol === "function") { ducked = !!m.on; setVol(); }
 });
 function cardHelper() {
