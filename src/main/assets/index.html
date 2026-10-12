@@ -10,45 +10,101 @@ html,body{margin:0;min-height:100%;background:#111;color:#eee;font:16px system-u
 main{max-width:560px;margin:0 auto;padding:max(24px,env(safe-area-inset-top)) 16px 24px}
 h1{font-size:24px;margin:8px 0 4px}
 p.sub{margin:0 0 20px;color:#aaa}
-button.skin{display:flex;gap:16px;align-items:center;width:100%;margin:0 0 12px;padding:16px;border:2px solid #333;
-  border-radius:12px;background:#1c1c1c;color:inherit;font:inherit;text-align:left;cursor:pointer}
-button.skin.on,button.skin:focus-visible{border-color:#f0c040;outline:none}
+.row{display:flex;gap:8px;align-items:stretch;margin:0 0 12px}
+button{font:inherit;color:inherit;cursor:pointer}
+button.skin{flex:1;min-width:0;display:flex;gap:16px;align-items:center;padding:16px;border:2px solid #333;
+  border-radius:12px;background:#1c1c1c;text-align:left}
+button.skin.on,button:focus-visible{border-color:#f0c040;outline:none}
+button.x{flex:none;width:52px;border:2px solid #333;border-radius:12px;background:#1c1c1c;color:#aaa;font-size:20px}
+button.x.on{border-color:#f0c040}
 .icon{flex:none;width:56px;height:56px;border-radius:12px;display:grid;place-items:center;font-size:30px}
 .skin b{display:block;font-size:18px}
-.skin span{color:#aaa;font-size:14px}
+.skin span{display:block;color:#aaa;font-size:14px}
+.skin em{font-style:normal;font-size:13px;font-weight:600;color:#f0c040}
+.ask{margin:-4px 0 12px;padding:12px 16px;border-radius:12px;background:#2a2a2a;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ask p{flex-basis:100%;margin:0 0 4px}
+.ask button{padding:10px 16px;border:2px solid #444;border-radius:10px;background:#333}
+.ask button.on{border-color:#f0c040}
+.msg{color:#aaa;padding:12px 4px}
 </style>
 </head>
 <body>
-<main>
-  <h1>🐻 kuma3 Skins</h1>
-  <p class="sub">Review your kuma3 cards in another look. Back from a skin brings you here.</p>
-  <div id="list"></div>
-  <button class="skin" id="set"><div class="icon" style="background:#424242">⚙️</div><div><b>Settings</b><span>Decks shown in every skin</span></div></button>
-</main>
+<main id="main"></main>
 <script src="shared.js"></script>
 <script>
-const SKINS = [
-  {id: "anki", name: "Anki", icon: "⭐", bg: "#1188d8", about: "kuma3 Anki's own look: deck tree, drawer, the four answer buttons"},
-  {id: "flashcolor", name: "Flashcolor", icon: "🟨", bg: "#d9a900", about: "One colour per moment, huge type: green home, yellow question, black answer"},
-  {id: "onigiri", name: "Onigiri", icon: "🍙", bg: "#2f8f5f", about: "A calm dashboard: stats, heatmap, palettes, one Study button"},
-  {id: "xp", name: "Anki XP", icon: "🪟", bg: "#245edb", about: "Windows XP: XP, combos, quests, trophies; can be your home screen"},
-  {id: "hunger", name: "Anki Hunger", icon: "🗡️", bg: "#5a1010", about: "Fear & Hunger fights: arms, legs, head; Again = you get hit"},
-  {id: "joker", name: "Anki Joker", icon: "🃏", bg: "#1d6b45", about: "Balatro runs: blinds, hands and jokers"}];
-let at = 0;
-const list = document.getElementById("list");
-list.innerHTML = SKINS.map((s, i) => `<button class="skin" data-i="${i}"><div class="icon" style="background:${s.bg}">${s.icon}</div>
-  <div><b>${s.name}</b><span>${s.about}</span></div></button>`).join("");
-const buttons = [...list.querySelectorAll("button")];
-const pick = i => B ? B.useSkin(SKINS[i].id) : alert(`In the app this opens ${SKINS[i].name}.`);
-buttons.forEach(b => b.onclick = () => pick(+b.dataset.i));
-document.getElementById("set").onclick = () => B ? B.settings(1) : alert("In the app this opens the settings.");
-function mark() { buttons.forEach((b, i) => b.classList.toggle("on", i === at)); }
-// the gamepad (MainActivity): up/down choose, A opens
-function pad(k) {
-  if (k === "up" || k === "down") { at = (at + (k === "up" ? -1 : 1) + SKINS.length) % SKINS.length; mark(); }
-  if (k === "a") pick(at);
+// The picker: Anki (in the app) + the skins downloaded from the catalog (github.com/Pedrubik2000/kuma3-skins-catalog).
+// ✕ removes a downloaded skin (its XP stays: it lives in the progress note); "Get more skins" lists the catalog.
+const ANKI = {id: "anki", name: "Anki", icon: "⭐", bg: "#1188d8", about: "kuma3 Anki's own look: deck tree, drawer, the four answer buttons"};
+const demo = [   // the browser preview's catalog
+  {id: "onigiri", name: "Onigiri", icon: "🍙", bg: "#2f8f5f", version: 1, app: 3, about: "A calm dashboard: stats, heatmap, palettes, one Study button"},
+  {id: "flashcolor", name: "Flashcolor", icon: "🟨", bg: "#d9a900", version: 1, app: 3, about: "One colour per moment, huge type"}];
+let demoMine = [demo[0]];
+const api = B ? {
+  mine: () => JSON.parse(B.installedSkins()), catalog: () => { const t = B.catalog(); return t ? JSON.parse(t).skins : null; },
+  app: () => +B.appVersion(), install: id => B.installSkin(id), remove: id => B.removeSkin(id),
+  use: id => B.useSkin(id), settings: () => B.settings(1)
+} : {
+  mine: () => demoMine, catalog: () => demo, app: () => 3,
+  install: id => { demoMine = [...demoMine.filter(s => s.id !== id), demo.find(s => s.id === id)]; return ""; },
+  remove: id => { demoMine = demoMine.filter(s => s.id !== id); },
+  use: id => alert(`In the app this opens ${id}.`), settings: () => alert("In the app this opens the settings.")
+};
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, ch => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[ch]));
+let view = "mine", asking = null, shop = null, busy = null, note = "", at = 0;
+const card = (s, extra = "") => `<div class="icon" style="background:${esc(s.bg)}">${esc(s.icon)}</div><div><b>${esc(s.name)}</b><span>${esc(s.about)}</span>${extra}</div>`;
+
+function render() {
+  view === "mine" ? mineView() : shopView();
+  mark();
 }
-function back() { return false; }
+function mineView() {
+  const mine = [ANKI, ...api.mine()];
+  $("main").innerHTML = `<h1>🐻 kuma3 Skins</h1><p class="sub">Review your kuma3 cards in another look. Back from a skin brings you here.</p>
+    ${mine.map(s => `<div class="row"><button class="skin" data-use="${esc(s.id)}">${card(s)}</button>${s.id === "anki" ? "" : `<button class="x" data-ask="${esc(s.id)}" aria-label="Remove ${esc(s.name)}">✕</button>`}</div>
+      ${asking === s.id ? `<div class="ask"><p>Remove ${esc(s.name)}? Your XP and streak stay; you can download it again.</p>
+        <button data-remove="${esc(s.id)}">Remove</button><button data-keep>Keep</button></div>` : ""}`).join("")}
+    <div class="row"><button class="skin" id="shop"><div class="icon" style="background:#2e5d3a">⬇️</div><div><b>Get more skins</b><span>Download skins from the kuma3 Skins catalog</span></div></button></div>
+    <div class="row"><button class="skin" id="set"><div class="icon" style="background:#424242">⚙️</div><div><b>Settings</b><span>Decks shown in every skin</span></div></button></div>`;
+  $("main").querySelectorAll("[data-use]").forEach(b => b.onclick = () => api.use(b.dataset.use));
+  $("main").querySelectorAll("[data-ask]").forEach(b => b.onclick = () => { asking = asking === b.dataset.ask ? null : b.dataset.ask; render(); });
+  $("main").querySelectorAll("[data-remove]").forEach(b => b.onclick = () => { api.remove(b.dataset.remove); asking = null; at = 0; render(); });
+  $("main").querySelectorAll("[data-keep]").forEach(b => b.onclick = () => { asking = null; render(); });
+  $("shop").onclick = openShop;
+  $("set").onclick = () => api.settings();
+}
+function openShop() {
+  view = "shop"; shop = null; note = ""; at = 0;
+  $("main").innerHTML = `<h1>Get more skins</h1><p class="msg">Loading the catalog…</p>`;
+  setTimeout(() => { try { shop = api.catalog(); } catch (e) { shop = null; } if (!shop) note = "Can't reach the catalog. Check the connection and try again."; render(); }, 30);
+}
+function shopView() {
+  const mine = Object.fromEntries(api.mine().map(s => [s.id, s])), app = api.app();
+  const state = s => s.app > app ? "Needs a newer kuma3 Skins" : !mine[s.id] ? "Download" : (mine[s.id].version || 0) < s.version ? "Update" : "Installed";
+  $("main").innerHTML = `<h1>Get more skins</h1><p class="sub">From github.com/Pedrubik2000/kuma3-skins-catalog. A skin can read and answer your kuma3 cards, so only this catalog is used.</p>
+    ${note ? `<p class="msg">${esc(note)}</p>` : ""}
+    ${(shop || []).map(s => { const st = busy === s.id ? "Downloading…" : state(s);
+      return `<div class="row"><button class="skin" data-get="${esc(s.id)}" ${st === "Download" || st === "Update" ? "" : "aria-disabled=\"true\""}>${card(s, `<em>${esc(st)}</em>`)}</button></div>`; }).join("")}
+    <div class="row"><button class="skin" id="bk"><div class="icon" style="background:#424242">←</div><div><b>Back</b><span>Your skins</span></div></button></div>`;
+  $("main").querySelectorAll("[data-get]").forEach(b => b.onclick = () => {
+    const s = shop.find(x => x.id === b.dataset.get), st = state(s);
+    if (st === "Installed") return api.use(s.id);
+    if (st !== "Download" && st !== "Update") return;
+    busy = s.id; render();
+    setTimeout(() => { const err = api.install(s.id); busy = null; note = err ? `${s.name}: ${err}` : `${s.name} is ready: tap it to open.`; render(); }, 30);
+  });
+  $("bk").onclick = () => { view = "mine"; at = 0; render(); };
+}
+// the gamepad (MainActivity): up/down move through the buttons, A presses one
+const buttons = () => [...$("main").querySelectorAll("button")];
+function mark() { buttons().forEach((b, i) => b.classList.toggle("on", i === at)); }
+function pad(k) {
+  const n = buttons().length; if (!n) return;
+  if (k === "up" || k === "down") { at = (at + (k === "up" ? -1 : 1) + n) % n; mark(); buttons()[at].scrollIntoView({block: "nearest"}); }
+  if (k === "a") buttons()[at]?.click();
+}
+function back() { if (view === "shop") { view = "mine"; at = 0; render(); return true; } if (asking) { asking = null; render(); return true; } return false; }
+render();
 </script>
 </body>
 </html>

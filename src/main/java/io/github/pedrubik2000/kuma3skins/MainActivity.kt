@@ -34,8 +34,8 @@ import java.io.File
 import java.util.UUID
 import kotlin.concurrent.thread
 
-/** kuma3 Skins: reps-only reviewers of kuma3's cards, each skin one page (assets/<skin>/index.html: anki = kuma3 Anki's own look, xp = Anki XP,
- *  hunger = Anki Hunger, joker = Anki Joker, onigiri = Onigiri, flashcolor = Flashcolor); assets/index.html picks the skin. [Bridge] gives the pages kuma3's decks
+/** kuma3 Skins: reps-only reviewers of kuma3's cards, each skin one page: anki (kuma3 Anki's own look) in assets/anki, the others
+ *  downloaded from the catalog repo into skins/<id>; assets/index.html picks, downloads and removes them. [Bridge] gives the pages kuma3's decks
  *  and cards; scheduling (FSRS-7/RWKV), media and sync stay kuma3's job. */
 class MainActivity : Activity() {
     private lateinit var web: WebView
@@ -45,8 +45,14 @@ class MainActivity : Activity() {
 
     private val prefs get() = getSharedPreferences("kuma3-skins", MODE_PRIVATE)
 
+    /** Downloaded skins: skins/<id>/ (index.html, skin.json, its files) + skins/shared.js, the app's own copy. */
+    private val skinsDir get() = File(filesDir, "skins")
+
+    /** Anki (in the APK) or a downloaded skin that is still there. */
+    private fun isSkin(id: String?) = id == "anki" || (id != null && ID.matches(id) && File(skinsDir, "$id/index.html").isFile)
+
     /** The chosen skin, or null for the picker. */
-    private val skin get() = prefs.getString("skin", null)?.takeIf { it in SKINS }
+    private val skin get() = prefs.getString("skin", null)?.takeIf(::isSkin)
 
     /** Another skin (null = the picker): a fresh activity, so the new page gets its own bridge token. */
     private fun useSkin(name: String?) {
@@ -91,7 +97,16 @@ class MainActivity : Activity() {
             addJavascriptInterface(Gate(), "Anki")
             inSettings = prefs.getBoolean("settings", false)
             prefs.edit().remove("settings").apply()
-            loadUrl("file:///android_asset/${if (inSettings) "settings/" else skin?.let { "$it/" } ?: ""}index.html")
+            // a downloaded skin's "../shared.js" = skins/shared.js, written from the APK at every start (never downloaded)
+            skinsDir.mkdirs()
+            File(skinsDir, "shared.js").writeBytes(assets.open("shared.js").use { it.readBytes() })
+            val s = skin
+            loadUrl(when {
+                inSettings -> "file:///android_asset/settings/index.html"
+                s == null -> "file:///android_asset/index.html"
+                s == "anki" -> "file:///android_asset/anki/index.html"
+                else -> Uri.fromFile(File(skinsDir, "$s/index.html")).toString()
+            })
         }
         setContentView(web)
         // targetSdk 36 (predictive back) no longer calls onBackPressed on Android 13+.
@@ -224,7 +239,61 @@ class MainActivity : Activity() {
 
         /** Switch to skin [name] ("" = the skin picker). */
         @JavascriptInterface
-        fun useSkin(name: String) = runOnUiThread { this@MainActivity.useSkin(name.takeIf { it in SKINS }) }
+        fun useSkin(name: String) = runOnUiThread { this@MainActivity.useSkin(name.takeIf(::isSkin)) }
+
+        // ---- the skin catalog (github.com/Pedrubik2000/kuma3-skins-catalog): the picker downloads and removes skins.
+        // Only that catalog, over HTTPS; a skin's files must be listed in its entry and land inside skins/<id>/.
+
+        private fun fetch(url: String): ByteArray =
+            (java.net.URL(url).openConnection() as java.net.HttpURLConnection).run {
+                connectTimeout = 10_000; readTimeout = 20_000; useCaches = false
+                try { check(responseCode == 200) { "HTTP $responseCode" }; inputStream.use { it.readBytes() } } finally { disconnect() }
+            }
+
+        /** catalog.json as text, "" when offline. */
+        @JavascriptInterface
+        fun catalog(): String = runCatching { fetch(CATALOG + "catalog.json").decodeToString() }.getOrDefault("")
+
+        /** [skin.json of every downloaded skin] ({id, name, icon, bg, about, version, …} as the catalog had it). */
+        @JavascriptInterface
+        fun installedSkins(): String = JSONArray().apply {
+            skinsDir.listFiles()?.sortedBy { it.name }?.forEach { d ->
+                if (isSkin(d.name)) runCatching { put(JSONObject(File(d, "skin.json").readText())) }
+            }
+        }.toString()
+
+        /** This app's versionCode (a catalog entry's "app" = the oldest app it runs on). */
+        @JavascriptInterface
+        fun appVersion(): Int = packageManager.getPackageInfo(packageName, 0).longVersionCode.toInt()
+
+        /** Downloads (or updates) a skin from the catalog: "" when done, else what went wrong. */
+        @JavascriptInterface
+        fun installSkin(id: String): String = runCatching {
+            require(ID.matches(id) && id != "anki") { "bad skin id" }
+            val list = JSONObject(fetch(CATALOG + "catalog.json").decodeToString()).getJSONArray("skins")
+            val entry = (0 until list.length()).map(list::getJSONObject).first { it.getString("id") == id }
+            require(entry.optInt("app", 0) <= appVersion()) { "needs a newer kuma3 Skins" }
+            val tmp = File(skinsDir, ".$id").apply { deleteRecursively(); mkdirs() }
+            val files = entry.getJSONArray("files")
+            for (i in 0 until files.length()) {
+                val name = files.getString(i)
+                require(FILE.matches(name) && ".." !in name) { "bad file name $name" }
+                File(tmp, name).apply { parentFile?.mkdirs(); writeBytes(fetch("${CATALOG}skins/$id/$name")) }
+            }
+            require(File(tmp, "index.html").isFile) { "no index.html" }
+            File(tmp, "skin.json").writeText(entry.toString())
+            val dir = File(skinsDir, id)
+            dir.deleteRecursively()
+            check(tmp.renameTo(dir)) { "could not save it" }
+            ""
+        }.getOrElse { it.message ?: "download failed" }
+
+        /** Deletes a downloaded skin (its files; its XP stays in the progress note). Anki can't be removed. */
+        @JavascriptInterface
+        fun removeSkin(id: String) {
+            if (id != "anki" && ID.matches(id)) File(skinsDir, id).deleteRecursively()
+            if (prefs.getString("skin", null) == id) prefs.edit().remove("skin").apply()
+        }
 
         /** kuma3 Skins' settings page (1) or back from it to the skin (0). */
         @JavascriptInterface
@@ -612,7 +681,9 @@ class MainActivity : Activity() {
         const val KUMA3 = "io.github.pedrubik2000.kuma3"
         const val KUMAPIE = "io.github.pedrubik2000.kumapie.mobile"
         const val PROGRESS = "🐻 Anki XP progress" // every skin's: they share XP, reps and the streak
-        val SKINS = setOf("anki", "onigiri", "flashcolor", "xp", "hunger", "joker")
+        const val CATALOG = "https://raw.githubusercontent.com/Pedrubik2000/kuma3-skins-catalog/main/"
+        val ID = Regex("[a-z][a-z0-9-]{0,31}")
+        val FILE = Regex("[A-Za-z0-9_-][A-Za-z0-9_./-]{0,127}")
         const val DECK = "kumapie"
         const val SEP = "\u001f"
         val PACKAGES = listOf(KUMA3, "com.ichi2.anki.debug", "com.ichi2.anki")
