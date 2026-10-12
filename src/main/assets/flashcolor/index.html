@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>kuma3 Flashcolor</title>
+<style>
+/* Flashcolor: one full-screen colour per moment (green = home, yellow = question, black = answer) and huge type.
+   Home is one number: the cards left in the deck the Start button picks. */
+:root{--bg:#6be37c;--ink:#0d1f10;--again:#ff5a5a;--hard:#3a3a3a;--good:#6be37c;--easy:#ffd21f;
+  --serif:"Noto Serif","Roboto Serif",Georgia,serif;color-scheme:light}
+body[data-s="q"]{--bg:#ffd21f;--ink:#1c1700}
+body[data-s="a"]{--bg:#0b0b0b;--ink:#fff;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font:16px system-ui,Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+body{display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--ink);transition:background .25s}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+main{flex:1;min-height:0;display:flex;flex-direction:column}
+.top{flex:none;display:flex;align-items:center;gap:4px;padding:max(8px,env(safe-area-inset-top)) 12px 0 22px;font:600 14px ui-monospace,monospace}
+.top .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{width:44px;height:44px;display:grid;place-items:center;border-radius:50%}
+.ib:active{background:color-mix(in srgb,var(--ink) 12%,transparent)}
+.ib svg{width:24px;height:24px;fill:currentColor}
+.big{flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:0 28px;max-width:720px;width:100%;margin:0 auto}
+.num{font:800 clamp(110px,34vw,220px)/.85 var(--serif);letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.lead{font:700 clamp(28px,8vw,44px)/1.1 system-ui,sans-serif;letter-spacing:-.01em}
+.meta{font:500 14px ui-monospace,monospace;opacity:.75;text-align:left}
+.meta.pick{opacity:1;align-self:flex-start;border:2px solid var(--ink);border-radius:99px;padding:6px 14px;font-weight:700}
+.foot{flex:none;padding:0 22px max(22px,env(safe-area-inset-bottom));display:flex;justify-content:center}
+.pill{width:100%;max-width:520px;border:3px solid var(--ink);border-radius:99px;padding:15px;font-size:18px;font-weight:800}
+.pill:active{background:var(--ink);color:var(--bg)}
+.prog{flex:none;height:4px;margin:6px 22px 0;border-radius:9px;background:color-mix(in srgb,var(--ink) 15%,transparent);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--ink);transition:width .3s}
+.cardbox{flex:1;min-height:0;position:relative;margin:8px}
+#face{width:100%;height:100%;border:0;display:block;background:transparent}
+.rate{flex:none;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 12px max(16px,env(safe-area-inset-bottom));max-width:720px;width:100%;margin:0 auto}
+.rate button{min-height:64px;border-radius:18px;font-weight:800;font-size:16px;color:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.rate button small{font:500 12px ui-monospace,monospace;opacity:.75}
+.r1{background:var(--again)}.r2{background:var(--hard);color:#fff!important}.r3{background:var(--good)}.r4{background:var(--easy)}
+.list{flex:1;min-height:0;overflow:auto;padding:8px 16px max(16px,env(safe-area-inset-bottom))}
+.list button{display:flex;align-items:baseline;gap:12px;width:100%;padding:14px 8px;border-bottom:2px solid color-mix(in srgb,var(--ink) 15%,transparent);text-align:left;font-size:20px;font-weight:700}
+.list button span{flex:1;min-width:0;overflow-wrap:anywhere}
+.list button b{font:800 22px var(--serif);font-variant-numeric:tabular-nums}
+.list button.z{opacity:.45}
+.list button.on span{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:6px}
+.veil{position:fixed;inset:0;background:#0007;z-index:5}
+.sheet{position:fixed;left:0;right:0;bottom:0;margin:0 auto;max-width:560px;background:var(--ink);color:var(--bg);z-index:6;border-radius:24px 24px 0 0;padding:12px 0 max(12px,env(safe-area-inset-bottom))}
+.sheet button{display:block;width:100%;padding:14px 26px;font-size:17px;font-weight:600;text-align:left}
+.msg{flex:1;display:flex;flex-direction:column;justify-content:center;gap:12px;padding:0 28px;line-height:1.4}
+.msg .pill{max-width:none}
+@media (prefers-reduced-motion:reduce){body,.prog i{transition:none}}
+</style>
+</head>
+<body data-s="home">
+<main id="main"></main>
+<div id="layer"></div>
+<script src="../shared.js"></script>
+<script>
+// ---------------------------------------------------------------- data: the bridge, or example data in a browser
+const mock = (() => {
+  const decks = [
+    {id: "1", name: "Deutsch", new: 12, learn: 3, due: 51},
+    {id: "2", name: "Deutsch::Core 1000", new: 12, learn: 0, due: 28, cards: [
+      ["Ich hab keine Ahnung.", "Ich hab keine Ahnung.<hr>I have no idea.<br><i>Ahnung = idea, clue</i>"],
+      ["Es ist nicht weit.", "Es ist nicht weit.<hr>It's not far.<br><i>weit = far</i>"]]},
+    {id: "3", name: "Deutsch::Grammatik A1", new: 0, learn: 0, due: 5, cards: [["der, die oder das? ___ Tisch", "der Tisch"]]},
+    {id: "4", name: "Deutsch::Mined", new: 0, learn: 3, due: 18, cards: [["Wo ist er?", "Wo ist er?<hr>Where is he?"]]},
+    {id: "5", name: "English", new: 0, learn: 0, due: 0}, {id: "7", name: "Japanese", new: 0, learn: 0, due: 9, cards: [["雨", "雨<hr>あめ · rain"]]},
+    {id: "8", name: "kumapie", new: 0, learn: 0, due: 0}];
+  let n = 0;
+  const act = {};
+  for (let i = 0; i < 371; i++) {
+    const t = new Date(Date.now() - 4 * 3600e3 - i * 86400e3), k = t.toISOString().slice(0, 10);
+    const r = Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
+    if (i < 12 || r > (i < 120 ? .25 : .75)) { const reps = Math.round(20 + r * 140); act[k] = [reps, reps * 9000, Math.round(reps * .7), Math.round(reps * .63)]; }
+  }
+  return {
+    status: () => ({pkg: "example", anki: true, media: true, mediaBase: ""}),
+    decks: () => decks.map(({cards, ...d}) => d),
+    next(id) {
+      const d = decks.find(x => x.id === id), c = d?.cards || decks.find(x => x.name.startsWith(d?.name + "::") && x.cards)?.cards;
+      if (!c || !(d.new + d.learn + d.due)) return null;
+      const [q, a] = c[n++ % c.length];
+      return {nid: String(n), ord: 0, css: ".card{font-size:26px;text-align:center}", q, a, times: ["<10m", "1d", "3d", "8d"]};
+    },
+    answer() { const d = decks.find(x => x.id === sel); if (d.due) d.due--; else if (d.new) d.new--; },
+    activity: () => act, today: () => ({cards: 37, seconds: 336}),
+    sync() { alert("In the app this asks kuma3 to sync with AnkiWeb."); },
+    open() { alert("In the app this opens kuma3."); }, screen(s) { alert(`In the app this opens kuma3's ${s} screen.`); },
+    settings() { alert("In the app this opens kuma3 Skins' settings."); },
+    undoLabel: () => "", undo: () => 0, setCollapsed() {}, grantAnki() {}, grantMedia() {},
+    progressRead: () => ({}), progressWrite() {}, model: () => "browser"
+  };
+})();
+const api = B ? {
+  status: () => JSON.parse(B.status()), decks: () => JSON.parse(B.decks()), next: id => JSON.parse(B.next(id)),
+  answer: (c, ease, ms) => B.answer(c.nid, c.ord, ease, ms), sync: () => B.sync(), open: () => B.openAnki(),
+  activity: () => JSON.parse(B.activity(371)), today: () => JSON.parse(B.today()),
+  undoLabel: () => B.undoLabel(), undo: () => B.undo(), setCollapsed: (id, c) => B.setCollapsed(id, c ? 1 : 0),
+  settings: () => B.settings(1), screen: (s, did) => B.openScreen(s, did ?? ""), grantAnki: () => B.grantAnki(), grantMedia: () => B.grantMedia(),
+  progressRead: () => JSON.parse(B.progressRead()), progressWrite: (d, t) => B.progressWrite(d, t), model: () => B.model()
+} : mock;
+
+// ---------------------------------------------------------------- state
+const store = (k, v) => { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } };
+let st = {}, decks = [], sel = store("flash-deck"), view = "home", card = null, shown = false, shownAt = 0, sheet = null;
+let act = null, sess = {done: 0};
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[ch]));
+const deck = () => decks.find(d => d.id === sel);
+const left = d => d ? d.new + d.learn + d.due : 0;
+const depth = d => d.name.split("::").length - 1;
+const short = d => d.name.split("::").at(-1);
+
+// ---------------------------------------------------------------- XP, goal and streak: the shared progress note
+// (same rules as Anki XP without its combo: Again 2 XP, Hard/Good/Easy 10). This device's part is "<model>-flash-…"
+// = {xp, days: {day: {reps, xp, goal}}}; `g` is every skin's parts merged, so level and streak match the other skins.
+let device = store("flash-device"), mine = store("flash-mine") || {xp: 0, days: {}}, others = {}, g;
+if (!device) { device = `${api.model()}-flash-${Math.random().toString(36).slice(2, 8)}`; store("flash-device", device); }
+function dayKey(back = 0) {   // Anki's day starts at 4 am (the format the other skins use)
+  const t = new Date(Date.now() - 4 * 3600e3 - back * 86400e3);
+  return `${t.getFullYear()}-${t.getMonth() + 1}-${t.getDate()}`;
+}
+const isoDay = (back = 0) => { const t = new Date(Date.now() - 4 * 3600e3 - back * 86400e3);
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`; };
+function merge() {
+  const parts = [mine, ...Object.values(others)], days = {};
+  for (const p of parts) for (const [k, v] of Object.entries(p.days || {})) {
+    const d = days[k] ??= {reps: 0, goal: 0}; d.reps += v.reps | 0; d.goal = Math.max(d.goal, v.goal | 0);
+  }
+  const goal = parts.map(p => p.goal || [100, 0]).reduce((x, y) => y[1] > x[1] ? y : x)[0];
+  const studied = k => (days[k]?.reps || 0) > 0;
+  let streak = 0; for (let i = studied(dayKey()) ? 0 : 1; studied(dayKey(i)); i++) streak++;
+  return {xp: parts.reduce((n, p) => n + (p.xp | 0), 0), goal, streak, todayDone: studied(dayKey())};
+}
+g = merge();
+function syncGame() { try { const all = api.progressRead(); delete all[device]; others = all; } catch (e) {} g = merge(); }
+function saveGame() { g = merge(); store("flash-mine", mine); try { api.progressWrite(device, JSON.stringify(mine)); } catch (e) {} }
+const level = xp => Math.floor((Math.sqrt(1 + 0.08 * xp) - 1) / 2);   // level L starts at 50·L·(L+1) XP (Anki XP's)
+function score(ease) {
+  const xp = ease === 1 ? 2 : 10, t = mine.days[dayKey()] ??= {reps: 0, xp: 0, goal: g.goal};
+  t.reps++; t.xp += xp; t.goal = g.goal; mine.xp += xp;
+  saveGame();
+}
+
+// ---------------------------------------------------------------- numbers for the dashboard
+function todayStats() {   // kuma3's own count (every app); an old kuma3: this skin's session
+  let t = null; try { t = api.today(); } catch (e) {}
+  return t || {cards: sess.done, seconds: 0};
+}
+function last30() {   // pace (s/card) and retention (passed review-queue cards) over the last 30 days
+  let n = 0, ms = 0, rev = 0, ok = 0;
+  for (let i = 0; i < 30; i++) { const a = act?.[isoDay(i)]; if (a) { n += a[0]; ms += a[1]; rev += a[2]; ok += a[3]; } }
+  return {pace: n ? ms / n / 1000 : 0, retention: rev ? 100 * ok / rev : null};
+}
+function minutes(cards, t, l30) {   // "about 6 min": today's pace, else the last 30 days', else 8 s a card
+  const pace = t.cards >= 10 && t.seconds ? t.seconds / t.cards : l30.pace || 8;
+  return Math.max(1, Math.round(cards * pace / 60));
+}
+// the default deck for the Study button: the last one studied while it has cards, else the one with the most
+function smartDeck() {
+  if (left(deck())) return deck();
+  return decks.filter(d => left(d)).sort((a, b) => left(b) - left(a) || depth(b) - depth(a))[0] ?? null;
+}
+
+const ICON = {
+  back: "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
+  sync: "M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z",
+  replay: "M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z",
+  down: "M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z",
+  right: "M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z",
+  more: "M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z",
+  undo: "M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z",
+  plus: "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z",
+  browser: "M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z",
+  stats: "M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z",
+  settings: "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z",
+  study: "M8 5v14l11-7z",
+  anki: "M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"};
+const svg = k => `<svg viewBox="0 0 24 24"><path d="${ICON[k]}"/></svg>`;
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+// ---------------------------------------------------------------- views (each sets the body's colour: data-s)
+function render() {
+  ({home: homeView, decks: decksView, review: reviewView, setup: setupView, error: errorView})[view]();
+  $("layer").innerHTML = sheet ? sheetHTML() : "";
+  if (sheet) wireSheet();
+}
+const paint = s => document.body.dataset.s = s;
+function homeView() {
+  paint("home");
+  const s = smartDeck(), t = todayStats(), L = level(g.xp), m = s ? minutes(left(s), t, last30()) : 0;
+  const streak = !g.streak ? "Start a streak today" : g.todayDone ? `🔥 ${g.streak} days · today counts` : `🔥 ${g.streak} days · one review keeps it`;
+  $("main").innerHTML = `<div class="top"><span class="t">Lv ${L + 1} · ${t.cards} / ${g.goal} today</span>
+      <button class="ib" id="sy" aria-label="Sync">${svg("sync")}</button><button class="ib" id="mo" aria-label="More">${svg("more")}</button></div>
+    <div class="big">
+      <button class="meta pick" id="dk">${s ? esc(s.name.replaceAll("::", " · ").toUpperCase()) : "DECKS"} ▾</button>
+      <div class="num">${s ? left(s) : 0}</div>
+      <div class="lead">${s ? `${left(s) === 1 ? "card" : "cards"} today.<br>About ${plural(m, "minute")}.` : "Nothing due.<br>Well done."}</div>
+      <div class="meta">${streak}</div>
+    </div>
+    <div class="foot"><button class="pill" id="go">${s ? "Start →" : "Sync"}</button></div>`;
+  $("go").onclick = () => s ? (pick(s.id), study()) : api.sync();
+  $("dk").onclick = () => { view = "decks"; render(); };
+  $("sy").onclick = () => api.sync();
+  $("mo").onclick = () => { sheet = "more"; render(); };
+}
+// every deck: a tap makes it the one Start studies (long press: kuma3's deck options)
+function decksView() {
+  paint("home");
+  $("main").innerHTML = `<div class="top"><button class="ib" id="bk" aria-label="Back">${svg("back")}</button><span class="t">PICK A DECK</span></div>
+    <div class="list">${decks.map(d => `<button data-id="${d.id}" class="${left(d) ? "" : "z"}${d.id === sel ? " on" : ""}" style="padding-left:${8 + depth(d) * 20}px">
+      <span>${esc(short(d))}</span><b>${left(d)}</b></button>`).join("")}</div>`;
+  $("bk").onclick = () => { view = "home"; render(); };
+  $("main").querySelectorAll("[data-id]").forEach(b => {
+    b.onclick = () => { pick(b.dataset.id); view = "home"; render(); };
+    b.oncontextmenu = e => { e.preventDefault(); api.screen("deck_options", b.dataset.id); };
+  });
+}
+function reviewView() {
+  const d = deck(), total = sess.done + left(d);
+  let undo = ""; try { undo = api.undoLabel(); } catch (e) {}
+  paint(!card ? "home" : shown ? "a" : "q");
+  const top = `<div class="top"><button class="ib" id="bk" aria-label="Back">${svg("back")}</button><span class="t">${esc(d ? short(d) : "")} · ${sess.done} / ${total}</span>
+    ${undo ? `<button class="ib" id="un" title="${esc(undo)}">${svg("undo")}</button>` : ""}<button class="ib" id="rp" aria-label="Replay">${svg("replay")}</button></div>
+    <div class="prog"><i style="width:${total ? 100 * sess.done / total : 100}%"></i></div>`;
+  if (!card) {
+    $("main").innerHTML = `${top}<div class="msg"><div class="num">${sess.done}</div><div class="lead">${sess.done === 1 ? "card" : "cards"} done.<br>Deck clear.</div>
+      <button class="pill" id="hm">Home</button></div>`;
+  } else {
+    $("main").innerHTML = `${top}<div class="cardbox"><iframe id="face"></iframe></div>${shown
+      ? `<div class="rate">${["Again", "Hard", "Good", "Easy"].map((b, k) => `<button class="r${k + 1}" data-r="${k + 1}">${b}<small>${esc(card.times?.[k] ?? "")}</small></button>`).join("")}</div>`
+      : `<div class="foot"><button class="pill" id="show">Flip ↓</button></div>`}`;
+    showCard($("face"), shown ? cardDoc(typeA(card.a), sounds(card.q)) : cardDoc(typeQ(card.q), []));
+    if (shown) $("main").querySelectorAll("[data-r]").forEach(b => b.onclick = () => rate(+b.dataset.r));
+    else $("show").onclick = reveal;
+  }
+  $("bk").onclick = leaveDeck;
+  if (undo) $("un").onclick = undoLast;
+  $("rp").onclick = () => toCard({t: "replay"});
+  if ($("hm")) $("hm").onclick = leaveDeck;
+}
+function setupView() {
+  paint("home");
+  const step = !st.pkg ? "Install kuma3 first: this skin shows and answers its cards." : !st.anki ? "Allow access to your kuma3 cards." : "Allow access to all files, for card images and audio.";
+  $("main").innerHTML = `<div class="msg"><div class="lead">Hi.</div><p>${step}</p>${st.pkg ? `<button class="pill" id="g">Allow</button>` : ""}</div>`;
+  if ($("g")) $("g").onclick = () => st.anki ? api.grantMedia() : api.grantAnki();
+}
+function errorView() {
+  paint("q");
+  $("main").innerHTML = `<div class="msg"><div class="lead">kuma3 isn't answering.</div><p>Open kuma3 once, then try again.</p>
+    <button class="pill" id="again">Try again</button><button class="pill" id="op">Open kuma3</button></div>`;
+  $("again").onclick = refresh; $("op").onclick = () => api.open();
+}
+// ⋯: kuma3's own screens
+function sheetHTML() {
+  const row = (id, label) => `<button id="${id}">${label}</button>`;
+  return `<div class="veil" id="veil"></div><div class="sheet">${row("sBrowser", "Card browser")}${row("sAdd", "Add a note")}${row("sStats", "Statistics")}
+    ${row("sSettings", "kuma3 settings")}${row("sSkins", "kuma3 Skins: decks shown, change skin")}${row("sAnki", "Open kuma3")}</div>`;
+}
+function wireSheet() {
+  const close = () => { sheet = null; render(); }, on = (id, f) => { $(id).onclick = () => { close(); f(); }; };
+  $("veil").onclick = close;
+  on("sBrowser", () => api.screen("browser", sel)); on("sAdd", () => api.screen("add", sel)); on("sStats", () => api.screen("stats"));
+  on("sSettings", () => api.screen("settings")); on("sSkins", () => api.settings()); on("sAnki", () => api.open());
+}
+
+// ---------------------------------------------------------------- reviewing
+function loadDecks() { decks = api.decks().filter(d => !(d.name === "Default" && !left(d))); }
+function refresh() {
+  try {
+    st = api.status();
+    if (!st.pkg || !st.anki || !st.media) { view = "setup"; return render(); }
+    if (view === "setup" || view === "error") view = "home";
+    loadDecks();
+    if (!deck()) sel = null;
+    if (view === "review") return nextCard();
+    try { act = api.activity(); } catch (e) { act = {}; }
+    syncGame();
+    render();
+  } catch (e) { view = "error"; render(); }
+}
+function pick(id) { sel = id; store("flash-deck", sel); }
+function nextCard() { typed = ""; card = sel ? api.next(sel) : null; shown = false; shownAt = Date.now(); render(); }
+function reveal() { if (card) { shown = true; render(); } }
+function study() { if (!sel) return; view = "review"; sess = {done: 0}; try { nextCard(); } catch (e) { view = "error"; render(); } }
+function undoLast() { try { if (api.undo()) { loadDecks(); sess.done = Math.max(0, sess.done - 1); nextCard(); } } catch (e) { view = "error"; render(); } }
+function leaveDeck() { view = "home"; card = null; refresh(); }
+function rate(ease) {
+  if (!card || !shown) return;
+  const ms = Math.min(Date.now() - shownAt, 60000);
+  try { api.answer(card, ease, ms); sess.done++; score(ease); loadDecks(); nextCard(); } catch (e) { view = "error"; render(); }
+}
+// Android back: a sheet, then the reviewer; false = the app goes to the skin picker
+function back() {
+  if (sheet) { sheet = null; render(); return true; }
+  if (view === "review") { leaveDeck(); return true; }
+  return false;
+}
+// the gamepad (AnKing layout like the other skins): review X Again, A Hard, Y Good, B Easy (any shows the answer
+// first), right/left scroll the card, L1 replay, R1 back; home: up/down the next deck with cards, A or B start
+const FACE = {x: 1, a: 2, y: 3, b: 4};
+function pad(k) {
+  if (sheet) { if (FACE[k]) { sheet = null; render(); } return; }
+  if (view === "review") {
+    if (k === "r1") return leaveDeck();
+    if (!card) { if (FACE[k]) leaveDeck(); return; }
+    if (FACE[k]) return shown ? rate(FACE[k]) : reveal();
+    if (k === "right" || k === "left") return toCard({t: "scroll", dy: k === "right" ? -240 : 240});
+    if (k === "l1") return toCard({t: "replay"});
+    return;
+  }
+  if (view !== "home" && view !== "decks") return;
+  const due = decks.filter(d => left(d)).map(d => d.id), at = smartDeck()?.id, step = {up: -1, down: 1}[k];   // up/down: the next deck with cards
+  if (step && due.length) { pick(due[(due.indexOf(at) + step + due.length) % due.length]); view = "home"; render(); }
+  else if (k === "a" || k === "b") { if (!left(deck())) { const s = smartDeck(); if (s) pick(s.id); } study(); }
+}
+document.addEventListener("keydown", e => {   // a hardware keyboard: space/enter show the answer, 1-4 answer
+  if (view !== "review" || !card) return;
+  if (!shown && (e.key === " " || e.key === "Enter")) { e.preventDefault(); reveal(); }
+  else if (shown && "1234".includes(e.key)) rate(+e.key);
+});
+addEventListener("focus", () => { if (view === "home" && !sheet) refresh(); });   // back from kuma3 or another app
+
+// ---------------------------------------------------------------- the card (same as the other skins), on the screen's colour, centred,
+// big bold type unless its note type says otherwise
+function cardDoc(html, skip, head = "") {
+  let first = true;
+  html = html.replace(/\[sound:([^\]]+)\]/g, (m, f) => {
+    const auto = first && !skip.includes(f); if (auto) first = false;
+    const src = esc(encodeURI(f));
+    return /\.(mp4|webm|mkv|mov|m4v)$/i.test(f)
+      ? `<video src="${src}" controls playsinline ${auto ? "autoplay" : ""}></video>`
+      : `<audio src="${src}" controls ${auto ? "autoplay" : ""}></audio>`;
+  });
+  const css = getComputedStyle(document.body), dark = shown;
+  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"><base href="${esc(st.mediaBase)}"><script>(${cardHelper})()<\/script>
+${head}<style>body{background:${css.getPropertyValue("--bg")};color:${css.getPropertyValue("--ink")};font:700 30px/1.3 system-ui,sans-serif}html{height:100%}body{box-sizing:border-box;min-height:100%;display:flex;flex-direction:column;justify-content:safe center}hr{align-self:stretch}</style><style>${card.css || ""}</style><style>html,body{margin:0}body{padding:60px 16px 24px}img,video{max-width:100%;height:auto}</style></head>
+<body class="card card${card.ord + 1}${dark ? " nightMode night_mode" : ""}">${html}</body></html>`;
+}
+const sounds = html => [...(html || "").matchAll(/\[sound:([^\]]+)\]/g)].map(m => m[1]);
+
+// Type-the-answer cards: the same box and check as the other skins
+const TYPE = /\[\[type:(?:[^\]]*:)?([^\]:]+)\]\]/g;
+let typed = "";
+const typeQ = html => html.replace(TYPE, `<input id="typeans" value="${esc(typed)}" autocomplete="off" autocapitalize="off" spellcheck="false"
+  style="font:inherit;font-size:.7em;width:80%;max-width:20em;flex-basis:auto;text-align:center;color:#000;background:#fff">`);
+function typeA(html) {
+  let n = 0;
+  return html.replace(TYPE, (m, f) => {
+    if (n++) return "";
+    const want = new DOMParser().parseFromString(card.fields?.[f] ?? "", "text/html").body.textContent.trim();
+    const got = typed.trim(), same = got.normalize("NFKC") === want.normalize("NFKC");
+    return same ? `<div style="color:#3c3">${esc(want)} ✓</div>`
+      : `<div><s style="color:#e33">${esc(got || "–")}</s><br><span style="color:#3c3">${esc(want)}</span></div>`;
+  });
+}
+
+refresh();
+</script>
+</body>
+</html>

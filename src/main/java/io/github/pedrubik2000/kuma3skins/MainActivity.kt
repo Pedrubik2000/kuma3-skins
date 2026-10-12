@@ -35,7 +35,7 @@ import java.util.UUID
 import kotlin.concurrent.thread
 
 /** kuma3 Skins: reps-only reviewers of kuma3's cards, each skin one page (assets/<skin>/index.html: anki = kuma3 Anki's own look, xp = Anki XP,
- *  hunger = Anki Hunger, joker = Anki Joker); assets/index.html picks the skin. [Bridge] gives the pages kuma3's decks
+ *  hunger = Anki Hunger, joker = Anki Joker, onigiri = Onigiri, flashcolor = Flashcolor); assets/index.html picks the skin. [Bridge] gives the pages kuma3's decks
  *  and cards; scheduling (FSRS-7/RWKV), media and sync stay kuma3's job. */
 class MainActivity : Activity() {
     private lateinit var web: WebView
@@ -567,6 +567,27 @@ class MainActivity : Activity() {
             }
         }.getOrNull() ?: "null"
 
+        /** kuma3's review history per Anki day (4 am start) over the last [days] days, for Onigiri's heatmap, pace and
+         *  retention: {"2026-10-11": [reviews, ms, review-queue reviews, of those passed]}; {} for a kuma3 without kuma3/revlog. */
+        @JavascriptInterface
+        fun activity(days: Int): String = runCatching {
+            val since = System.currentTimeMillis() - days * 86_400_000L
+            val zone = java.time.ZoneId.systemDefault()
+            val out = HashMap<String, LongArray>()
+            ready { contentResolver.query(uri("kuma3/revlog"), null, "since=?", arrayOf(since.toString()), null) }?.use { c ->
+                val id = c.getColumnIndexOrThrow("id"); val time = c.getColumnIndexOrThrow("time")
+                val type = c.getColumnIndexOrThrow("type"); val ease = c.getColumnIndexOrThrow("ease")
+                while (c.moveToNext()) {
+                    if (c.getInt(ease) == 0) continue   // manual reschedules, not reviews
+                    val day = java.time.Instant.ofEpochMilli(c.getLong(id) - 4 * 3_600_000L).atZone(zone).toLocalDate().toString()
+                    val a = out.getOrPut(day) { LongArray(4) }
+                    a[0]++; a[1] += minOf(c.getLong(time), 60_000L)
+                    if (c.getInt(type) == 1) { a[2]++; if (c.getInt(ease) > 1) a[3]++ }
+                }
+            }
+            JSONObject().apply { out.forEach { (k, v) -> put(k, JSONArray(v.toList())) } }.toString()
+        }.getOrNull() ?: "{}"
+
         /** What kuma3's Undo would undo now ("Undo Answer Card"…), "" = nothing. */
         @JavascriptInterface
         fun undoLabel(): String = runCatching {
@@ -591,7 +612,7 @@ class MainActivity : Activity() {
         const val KUMA3 = "io.github.pedrubik2000.kuma3"
         const val KUMAPIE = "io.github.pedrubik2000.kumapie.mobile"
         const val PROGRESS = "🐻 Anki XP progress" // every skin's: they share XP, reps and the streak
-        val SKINS = setOf("anki", "xp", "hunger", "joker")
+        val SKINS = setOf("anki", "onigiri", "flashcolor", "xp", "hunger", "joker")
         const val DECK = "kumapie"
         const val SEP = "\u001f"
         val PACKAGES = listOf(KUMA3, "com.ichi2.anki.debug", "com.ichi2.anki")
