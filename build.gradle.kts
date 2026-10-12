@@ -12,8 +12,24 @@ android {
         applicationId = "io.github.pedrubik2000.kuma3skins"
         minSdk = 30
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
+    }
+
+    // release key from the environment (never in the repo); without it, release builds are unsigned
+    val keystore = System.getenv("KUMA3SKINS_KEYSTORE")
+    signingConfigs {
+        if (keystore != null) {
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("KUMA3SKINS_KEYSTORE_PASSWORD")
+                keyAlias = "kuma3skins"
+                keyPassword = System.getenv("KUMA3SKINS_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        release { if (keystore != null) signingConfig = signingConfigs.getByName("release") }
     }
 
     compileOptions {
