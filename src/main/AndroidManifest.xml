@@ -20,11 +20,6 @@
         <package android:name="com.ichi2.anki.debug" />
         <package android:name="com.ichi2.anki" />
         <package android:name="io.github.pedrubik2000.kumapie.mobile" />
-        <!-- Anki XP's start menu, All Programs (the app can be the home screen) -->
-        <intent>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent>
     </queries>
 
     <application
@@ -39,12 +34,6 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <!-- pick kuma3 Skins as the home app: with the XP skin, its desktop, taskbar and start menu become the device's -->
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.HOME" />
-                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
     </application>

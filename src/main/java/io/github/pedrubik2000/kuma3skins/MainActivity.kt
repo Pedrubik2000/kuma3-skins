@@ -5,9 +5,6 @@ import android.app.AlertDialog
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -15,7 +12,6 @@ import android.os.Environment
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.Settings
-import android.util.Base64
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -29,7 +25,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 import kotlin.concurrent.thread
@@ -141,14 +136,10 @@ class MainActivity : Activity() {
     @Deprecated("Android 11-12 only; 13+ uses the OnBackInvokedCallback above")
     override fun onBackPressed() = back()
 
-    /** kuma3 Skins is the device's home app (Anki XP's desktop): Back never closes it. */
-    private val isHome get() = packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
-        PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == packageName
-
     /** Back the page doesn't use: from the settings to the skin, from a skin to the picker, from the picker out. */
     private fun back() = web.evaluateJavascript("window.back ? back() : false") {
         if (it == "true") return@evaluateJavascript
-        if (inSettings) showSettings(false) else if (skin != null) useSkin(null) else if (!isHome) finish()
+        if (inSettings) showSettings(false) else if (skin != null) useSkin(null) else finish()
     }
 
     /** A gamepad (8BitDo Micro): D-pad, A B X Y, L1 R1 go to the page's pad(); nothing else of
@@ -170,12 +161,6 @@ class MainActivity : Activity() {
         if (dir != hat && dir.isNotEmpty()) web.evaluateJavascript("window.pad && pad('$dir')", null)
         hat = dir
         return true
-    }
-
-    /** The Home button while the app is already in front: show the desktop, like XP's Win+D. */
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        if (intent.hasCategory(Intent.CATEGORY_HOME) && hasWindowFocus()) web.evaluateJavascript("window.home && home()", null)
     }
 
     /** The page's window.Anki. WebView puts it in every frame, the card's too (shared decks run their own scripts),
@@ -512,44 +497,6 @@ class MainActivity : Activity() {
             val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "anki-$skin").apply { mkdirs() }
             val songs = dir.listFiles().orEmpty().filter { it.extension.lowercase() in AUDIO }.sortedBy { it.name }
             return JSONArray(songs.map { Uri.fromFile(it).toString() }).toString()
-        }
-
-        /** All Programs: the page's gotApps([{pkg, cls, label, icon}]) is called when the list is ready (~3 s of icons). */
-        @JavascriptInterface
-        fun loadApps() {
-            thread {
-                val list = apps()
-                runOnUiThread { web.evaluateJavascript("gotApps($list)", null) }
-            }
-        }
-
-        /** The launchable apps, A-Z (icon = a PNG data URL). */
-        private fun apps(): String {
-            val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-            val out = JSONArray()
-            packageManager.queryIntentActivities(main, 0).filter { it.activityInfo.packageName != packageName }
-                .map { it to it.loadLabel(packageManager).toString() }.sortedBy { it.second.lowercase() }
-                .forEach { (app, label) ->
-                    out.put(JSONObject().put("pkg", app.activityInfo.packageName).put("cls", app.activityInfo.name)
-                        .put("label", label).put("icon", png(app.loadIcon(packageManager))))
-                }
-            return out.toString()
-        }
-
-        private fun png(icon: Drawable): String {
-            val bmp = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888)
-            icon.setBounds(0, 0, 96, 96)
-            icon.draw(Canvas(bmp))
-            val bytes = ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
-            return "data:image/png;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
-        }
-
-        @JavascriptInterface
-        fun launch(pkg: String, cls: String) = runOnUiThread {
-            runCatching { // an uninstalled desktop icon does nothing
-                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setClassName(pkg, cls)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
-            }
         }
 
         /** Desktop wallpaper: the first image in Pictures/anki-xp (made when missing) as a file:// URL, or "". */
